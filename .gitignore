@@ -1,0 +1,15 @@
+# Python bytecode
+*.pyc
+__pycache__/
+
+# Your vault data (keep private!)
+vault.dmg
+vault.cfg
+.vault_session
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints
+Untitled*.ipynb

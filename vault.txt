@@ -1,0 +1,361 @@
+Vault Utility Visual:
+
+
+    +----------------------------------------------------+
+    |                                                    |
+    |   Vault:                                           |
+    |       name:   "_main"                              |
+    |                                                    |
+    |   +--------------------------------------------+   |
+    |   |                                            |   |
+    |   |   Login:                                   |   |
+    |   |       name:       "StackOverflow"          |   |
+    |   |       username:   "ryan@ryangoree.com"     |   |
+    |   |       password:   "password"               |   |
+    |   |       email:      "ryan@ryangoree.com"     |   |
+    |   |       url:        "stackoverflow.com"      |   |
+    |   |       notes:                               |   |
+    |   |                                            |   |
+    |   +--------------------------------------------+   |
+    |                                                    |
+    |   +--------------------------------------------+   |
+    |   |                                            |   |
+    |   |   Login                                    |   |
+    |   |       name:       "test"                   |   |
+    |   |       username:   "ryan"                   |   |
+    |   |       password:   "pass"                   |   |
+    |   |       email:                               |   |
+    |   |       url:                                 |   |
+    |   |       notes:                               |   |
+    |   |                                            |   |
+    |   +--------------------------------------------+   |
+    |                                                    |
+    +----------------------------------------------------+
+
+
+    +-----------------------------------------------------+
+    |                                                     |
+    |   Vault:                                            |
+    |       name:  "work"                                 |
+    |                                                     |
+    |   +---------------------------------------------+   |
+    |   |                                             |   |
+    |   |   Login:                                    |   |
+    |   |       name:       "email"                   |   |
+    |   |       username:   "ryan.goree@usaa.com"     |   |
+    |   |       password:   "password"                |   |
+    |   |       email:                                |   |
+    |   |       url:                                  |   |
+    |   |       notes:                                |   |
+    |   |                                             |   |
+    |   +---------------------------------------------+   |
+    |                                                     |
+    +-----------------------------------------------------+
+
+
+> vault new [-f, --force] [-g, --genpass] [--in <vault-name>] [-v, --vault] [--with-notes <notes>] <name>
+
+    examples:
+
+        > vault new Asana
+        [1/4] Username: goree.ryan@gmail.com
+        [2/4] Password: password
+        [3/4] Email: 
+        [4/4] URL: https://app.asana.com/login/
+        Saved new login "Asana" in vault "_main"
+
+        --------------------------------------------------------
+
+        +------------------------------------------------------+
+        |                                                      |
+        |   Login:                                             |
+        |       name:       "Asana"                            |
+        |       username:   "goree.ryan@gmail.com"             |
+        |       password:   "password"                         |
+        |       email:                                         |
+        |       url:        "https://app.asana.com/login/"     |
+        |       notes:                                         |
+        |                                                      |
+        +------------------------------------------------------+
+
+        --------------------------------------------------------
+
+        > vault new Asana
+        Overwrite existing login "Asana" in vault "_main" [Y/n]? 
+
+    -f, --force example:
+
+        > vault new -f Asana
+        [1/4] Username: ryan@ryangoree.com
+        [2/4] Password: password
+        [3/4] Email: 
+        [4/4] URL: https://app.asana.com/login/
+        Overwrote login "Asana" in vault "_main"
+        
+        --------------------------------------------------------
+
+        +------------------------------------------------------+
+        |                                                      |
+        |   Login:                                             |
+        |       name:       "Asana"                            |
+        |       username:   "ryan@ryangoree.com"               |
+        |       password:   "password"                         |
+        |       email:                                         |
+        |       url:        "https://app.asana.com/login/"     |
+        |       notes:                                         |
+        |                                                      |
+        +------------------------------------------------------+
+
+        --------------------------------------------------------
+
+    -g, --generate example:
+
+        > vault new -g Slack
+        [1/3] Username: RyanG
+        [2/3] Email: goree.ryan@gmail.com
+        [3/3] URL: 
+        Saved new login "Slack" in vault "_main"
+        Password: password
+        
+        ------------------------------------------------
+
+        +----------------------------------------------+
+        |                                              |
+        |   Login:                                     |
+        |       name:       "Slack"                    |
+        |       username:   "goree.ryan@gmail.com"     |
+        |       password:   "password"                 |
+        |       email:                                 |
+        |       url:                                   |
+        |       notes:                                 |
+        |                                              |
+        +----------------------------------------------+
+
+        ------------------------------------------------
+
+    --in example:
+
+        > vault new --in work Slack
+        [1/4] Username: pli9298
+        [2/4] Password: password
+        [3/4] Email: ryan.goree@usaa.com
+        [4/4] URL: 
+        Saved new login "Slack" in vault "work"
+
+        -------------------------------------------------------
+
+        +-----------------------------------------------------+
+        |                                                     |
+        |   Login:                                            |
+        |       name:       "Slack"                           |
+        |       username:   "ryan.goree@usaa.com"             |
+        |       password:   "password"                        |
+        |       email:                                        |
+        |       url:                                          |
+        |       notes:                                        |
+        |                                                     |
+        +-----------------------------------------------------+
+
+        -------------------------------------------------------
+
+    -v, --vault example:
+
+        > vault new -v bills
+        Created new vault "bills"
+
+    --with-notes example:
+
+        > vault new --with-notes "minivan loan" Wunderlist
+        [1/4] Username: goree.ryan@gmail.com
+        [2/4] Password: password
+        [3/4] Email: 
+        [4/4] URL: 
+        Saved new login "Wunderlist" in vault "_main"
+
+        ---------------------------------------------------
+
+        +-------------------------------------------------+
+        |                                                 |
+        |   Login:                                        |
+        |       name:       "Wunderlist"                  |
+        |       username:   "goree.ryan@gmail.com"        |
+        |       password:   "password"                    |
+        |       email:                                    |
+        |       url:                                      |
+        |       notes:      "sharable checklists app"     |
+        |                                                 |
+        +-------------------------------------------------+
+
+        ---------------------------------------------------
+        
+> vault list [<vault-name>]
+
+    example:
+
+        > vault list
+        _main (5)
+        work (2)
+        bills (0)
+
+    <vault-name> example:
+
+        > vault list work
+        slack
+        test
+
+> vault open [--in <vault-name>] <login-name>
+
+    example:
+
+        > vault open Slack
+        username:   "goree.ryan@gmail.com"
+        password:   "password"
+        email: 
+        url: 
+        notes: 
+
+    --from work example:
+
+        > vault open --in work Slack
+        username:   "ryan.goree@usaa.com"
+        password:   password
+        email: 
+        url: 
+        notes: 
+
+> vault edit [--email [<email>]] [--in <vault-name>] [--notes [<notes>]] [--password [<password>]] [--url [<url>]] [--username [<username>]] <login-name>
+
+    example:
+
+        > vault edit Slack
+        [1/4] Username [goree.ryan@gmail.com]: 
+        [2/4] Password [old-password]: new-password
+        [3/4] Email []: 
+        [4/4] URL []: 
+        Edited login "Slack" in vault "_main"
+        username:   "goree.ryan@gmail.com"
+        password:   password
+        email: 
+        url: 
+        notes: 
+
+    --email example:
+    
+        > vault edit Slack --email goree.ryan@gmail.com
+        Edited login "Slack" in vault "_main"
+        username:   "goree.ryan@gmail.com"
+        password:   password
+        email:      "goree.ryan@gmail.com"
+        url: 
+        notes: 
+
+    --in example:
+    
+        > vault edit --in work Slack
+        [1/4] Username [ryan.goree@usaa.com]: 
+        [2/4] Password [Vicious#1]: password
+        [3/4] Email []: 
+        [4/4] URL []: 
+        Edited login "Slack" in vault "work"
+        username:   "ryan.goree@usaa.com"
+        password:   password
+        email: 
+        url: 
+        notes: 
+
+> vault rename [-f, --force] [--in <vault-name>] [-v, --vault] <old-name> <new-name>
+
+    example:
+
+        > vault rename Slack "Slack Personal"
+        Renamed login "Slack" to "Slack Personal" in vault "_main"
+
+        > vault rename "Slack Other" "Slack Personal"
+        Overwrite existing login "Slack Personal" in vault "_main" [Y/n]? 
+
+    -f, --force example:
+
+        > vault rename -f "Slack Other" "Slack Personal"
+        Overwrote login "Slack Personal" in vault "_main"
+
+    --in example:
+
+        > vault rename --in work Slack "Slack Business"
+        Renamed login "Slack" to "Slack Business" in vault "work"
+
+    -v, --vault example:
+
+        > vault rename -v work business
+        Renamed vault "work" to "business"
+
+> vault move [-f, --force] <login-name> <old-vault-name> <new-vault-name>
+
+    example:
+
+        > vault move Wunderlist _main work
+        Moved login "Wunderlist" from vault "_main" to vault "work"
+
+        > vault move Wunderlist misc work
+        Overwrite existing login "Wunderlist" in vault "work" [Y/n]? 
+
+    -f, --force example:
+
+        > vault move Wunderlist misc work
+        Overwrote login "Wunderlist" in vault "work"
+
+> vault genpass [--digits <digits-count>] [-f, --force] [--save-in [<vault-name>] <login-name>] [--symbols <symbols-count>] [<length>]
+    
+    example:
+
+        > vault genpass
+        Password: password
+
+    --digits example:
+
+        > vault genpass --digits 2
+        Password: password
+
+    --save-as examples:
+
+        > vault genpass --save-in StackOverflow
+        [1/3] Username: RyanDay
+        [2/3] Email: ryan@ryangoree.com
+        [3/3] URL: stackoverflow.com/login
+        Saved new login "StackOverflow" in vault "_main"
+        Password: password
+
+        > vault genpass --save-in StackOverflow
+        Edit password for existing login "StackOverflow" in vault "_main" [Y/n]?
+        Password: password
+
+    -f, --force example:
+
+        > vault genpass -f --save-in StackOverflow
+        Edited password for login "StackOverflow" in vault "_main"
+
+
+    --symbols example:
+
+        > vault genpass --symbols 4
+        Password: password
+
+    <length> example:
+
+        > vault genpass 12
+        Password: password
+
+> vault login [--in <vault-name>] <login-name>
+
+    example:
+
+        > vault login Slack
+
+    --in example:
+
+        > vault login --in work Slack
+
+> vault config [-g, --get] [-l, --list] <option> [<new-value>]
+
+    example
+
+        > vault config genpass.digits 2
