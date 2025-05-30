@@ -2,11 +2,47 @@ import argparse
 import sys
 
 
+class Logger:
+    class Colors:
+        RED = "\033[31m"
+        GREEN = "\033[32m"
+        YELLOW = "\033[33m"
+        BLUE = "\033[34m"
+        MAGENTA = "\033[35m"
+        CYAN = "\033[36m"
+        WHITE = "\033[37m"
+        BOLD = "\033[1m"
+        RESET = "\033[0m"
+
+    @staticmethod
+    def info(msg):
+        """Prints an informational message in blue."""
+        print(f"{Logger.Colors.BLUE}ℹ︎{Logger.Colors.RESET} {msg}")
+
+    @staticmethod
+    def success(msg):
+        """Prints a success message in green."""
+        print(f"{Logger.Colors.GREEN}✓{Logger.Colors.RESET} {msg}")
+
+    @staticmethod
+    def warning(msg):
+        """Prints a warning message in yellow."""
+        print(f"{Logger.Colors.YELLOW}⚠︎{Logger.Colors.RESET} {msg}")
+
+    @staticmethod
+    def error(msg):
+        """Prints an error message to stderr in red."""
+        print(
+            f"{Logger.Colors.RED}✖︎ Error:{Logger.Colors.RESET} {msg}", file=sys.stderr
+        )
+
+
 # Make the parser show the help msg when there's an error
 class DefaultHelpParser(argparse.ArgumentParser):
     def error(self, message):
+        print()
+        Logger.error(f"{message}\n")
         self.print_help()
-        sys.stderr.write("error: %s\n" % message)
         sys.exit(2)
 
 
@@ -15,10 +51,8 @@ parser = DefaultHelpParser(
 )
 
 subparsers = parser.add_subparsers(
-    dest="command", metavar="<command>", help="DESCRIPTION:"
+    dest="command", metavar="<command>", help="description:", required=True
 )
-
-subparsers.add_parser("debug")
 
 # init
 init_parser = subparsers.add_parser("init", help="Initiate Vault.")

@@ -8,7 +8,7 @@
 # To do:
 #   - Rewrite consistent helps
 
-from cli import parser
+from cli import Logger, parser
 import configparser
 import getpass
 import os
@@ -26,16 +26,26 @@ def confirm_prompt(message, cancel_message="Operation canceled.", default_no=Tru
     suffix = " [y/N]?" if default_no else " [Y/n]?"
 
     def ask():
-        response = input(message + suffix).lower().strip()
+        try:
+            response = input(message + suffix).lower().strip()
+        except (EOFError, KeyboardInterrupt):
+            if cancel_message:
+                Logger.warning(cancel_message)
+            else:
+                print()
+            return False
         if default_no and (response == "" or response.startswith("n")):
-            print(cancel_message)
+            if cancel_message:
+                Logger.warning(cancel_message)
+            else:
+                print()
             return False
         elif not default_no and (response == "" or response.startswith("y")):
             return True
         elif response in ["y", "yes", "n", "no"]:
             return response.startswith("y")
         else:
-            print("Invalid answer. Please enter y, yes, n, or no")
+            Logger.error("Invalid answer. Please enter y, yes, n, or no")
             return ask()
 
     return ask()
@@ -44,10 +54,10 @@ def confirm_prompt(message, cancel_message="Operation canceled.", default_no=Tru
 def copy_to_clipboard(text, description="Text"):
     try:
         subprocess.run(["pbcopy"], input=text.encode(), check=True)
-        print(f"{description} copied to clipboard")
+        Logger.success(f"{description} copied to clipboard")
         return True
     except subprocess.CalledProcessError:
-        print(f"Failed to copy {description.lower()} to clipboard")
+        Logger.error(f"Failed to copy {description.lower()} to clipboard")
         return False
 
 
@@ -69,7 +79,7 @@ class VaultConfig:
         cmd_path = os.path.dirname(os.path.realpath(__file__))
 
         self._config["vault"] = {
-            "session_timeout": "900",  # 15 mins in seconds
+            "session_timeout": "900 # 15 mins in seconds",
             "session_path": os.path.abspath(cmd_path + "/.vault_session"),
             "img_path": os.path.abspath(cmd_path + "/vault.dmg"),
             "mount_path": "/Volumes/vault",
@@ -78,7 +88,7 @@ class VaultConfig:
         self._config["genpass"] = {"length": "16", "digits": "4", "symbols": "4"}
 
         self.save()
-        print("Created default config file at %s" % self.config_path)
+        Logger.success(f"Created default config file at {self.config_path}")
 
     @property
     def db_path(self):
@@ -163,9 +173,8 @@ class Vault:
         else:
             if session_exists:
                 os.remove(Vault.cfg.session_path)
-            print("Session expired. Vault has been locked.")
-            Vault.lock(None)
-            sys.exit(2)
+            Vault.lock()
+            raise PermissionError("Session expired. Vault has been locked.")
 
     @staticmethod
     def _get_validated_connection():
@@ -218,7 +227,7 @@ class Vault:
 
         if args.vaults:
             for vault in args.vaults:
-                c.execute("INSERT INTO vaults VALUES (?)", tuple([vault]))
+                c.execute("INSERT INTO vaults VALUES (?)", (vault,))
 
         conn.commit()
         conn.close()
@@ -230,54 +239,46 @@ class Vault:
         c = conn.cursor()
 
         if args.mode == "vault":
-            t = tuple([args.name])
+            t = (args.name,)
             vault_exists = c.execute(
                 "SELECT name FROM vaults WHERE name = ?", t
             ).fetchone()
 
             if vault_exists:
                 conn.close()
-                raise ValueError("Vault '%s' already exists." % args.name)
+                raise ValueError(f"Vault '{args.name}' already exists.")
 
             c.execute("INSERT INTO vaults VALUES (?)", t)
             conn.commit()
             conn.close()
-            print("Created new vault '%s'." % args.name)
+            Logger.success(f"Created new vault '{args.name}'.")
             return
 
         action = ["Saved new"]
 
-        t = tuple([args.dest_vault])
+        t = (args.dest_vault,)
         vault_exists = c.execute("SELECT name FROM vaults WHERE name = ?", t).fetchone()
 
         if not vault_exists:
             if not confirm_prompt(
-                "Vault '%s' does not exist. Do you want to create it" % args.dest_vault,
-                "New login canceled.",
+                f"Vault '{args.dest_vault}' does not exist. Do you want to create it",
             ):
                 return
 
             c.execute("INSERT INTO vaults VALUES (?)", t)
             conn.commit()
-            print("Created new vault '%s'." % args.dest_vault)
+            Logger.success(f"Created new vault '{args.dest_vault}'.")
 
         t = (args.name, args.dest_vault)
         login_exists = c.execute(
             "SELECT name, vault FROM logins WHERE name = ? AND vault = ?", t
         ).fetchone()
 
-        if login_exists and not args.force:
-            if not confirm_prompt(
-                "Overwrite existing login '%s' in vault '%s'"
-                % (args.name, args.dest_vault),
-                "New login canceled.",
+        if login_exists:
+            if not args.force and not confirm_prompt(
+                f"Overwrite existing login '{args.name}' in vault '{args.dest_vault}'"
             ):
                 return
-
-            c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
-            action[0] = "Overwrote"
-
-        elif login_exists and args.force:
             c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
             action[0] = "Overwrote"
 
@@ -288,34 +289,35 @@ class Vault:
             question_index[0] += 1
             return question_index[0]
 
-        login = [args.name, input("[1/%i] Username: " % questions_length)]
+        login = [args.name, input(f"[1/{questions_length}] Username: ")]
 
         if args.genpass:
             login.append(Vault.genpass())
         else:
             login.append(
                 getpass.getpass(
-                    "[%i/%i] Password: " % (increment_question(), questions_length)
+                    f"[{increment_question()}/{questions_length}] Password: "
                 )
             )
 
         login.extend(
             [
-                input("[%i/%i] Email: " % (increment_question(), questions_length)),
-                input("[%i/%i] URL: " % (increment_question(), questions_length)),
+                input(f"[{increment_question()}/{questions_length}] Email: "),
+                input(f"[{increment_question()}/{questions_length}] URL: "),
                 args.notes,
                 args.dest_vault,
             ]
         )
 
         c.execute("INSERT INTO logins VALUES (?, ?, ?, ?, ?, ?, ?)", tuple(login))
-        print("%s login '%s' in vault '%s'" % (action[0], args.name, args.dest_vault))
+        Logger.success(f"{action[0]} login '{args.name}' in vault '{args.dest_vault}'")
         if args.genpass:
             if not copy_to_clipboard(login[2], "Password"):
                 if confirm_prompt(
-                    "Copy failed. Display generated password?", cancel_message=""
+                    "Display generated password?",
+                    cancel_message=None,
                 ):
-                    print("Password: %s" % login[2])
+                    Logger.info(f"Password: {login[2]}")
 
         conn.commit()
         conn.close()
@@ -327,19 +329,19 @@ class Vault:
 
         if args.src_vault:
 
-            t = tuple([args.src_vault])
+            t = (args.src_vault,)
             vault_exists = c.execute(
                 "SELECT name FROM vaults WHERE name = ?", t
             ).fetchone()
 
             if not vault_exists:
                 conn.close()
-                raise ValueError("Vault '%s' does not exist." % args.src_vault)
+                raise ValueError(f"Vault '{args.src_vault}' does not exist.")
 
             for login in c.execute(
                 "SELECT name FROM logins WHERE vault = ? ORDER BY LOWER(name)", t
             ):
-                print(login[0])
+                Logger.info(login[0])
             return
 
         vaults = c.execute("SELECT name FROM vaults ORDER BY LOWER(name)").fetchall()
@@ -350,7 +352,7 @@ class Vault:
                     "SELECT name FROM logins WHERE vault = ?", tuple([vault[0]])
                 ).fetchall()
             )
-            print("%s (%i)" % (vault[0], login_count))
+            Logger.info(f"{vault[0]} ({login_count})")
 
     @staticmethod
     def open(args):
@@ -358,12 +360,12 @@ class Vault:
         c = conn.cursor()
 
         vault_exists = c.execute(
-            "SELECT name FROM vaults WHERE name = ?", tuple([args.src_vault])
+            "SELECT name FROM vaults WHERE name = ?", (args.src_vault,)
         ).fetchone()
 
         if not vault_exists:
             conn.close()
-            raise ValueError("Vault '%s' does not exist." % args.src_vault)
+            raise ValueError(f"Vault '{args.src_vault}' does not exist.")
 
         login = c.execute(
             "SELECT * FROM logins WHERE name = ? AND vault = ?",
@@ -374,7 +376,7 @@ class Vault:
         if not login:
             conn.close()
             raise ValueError(
-                "Login '%s' does not exist in vault '%s'." % (args.name, args.src_vault)
+                f"Login '{args.name}' does not exist in vault '{args.src_vault}'."
             )
 
         # Display all fields, but copy password to clipboard instead of showing
@@ -384,11 +386,11 @@ class Vault:
             if field_name == "password":
                 password = col
             else:
-                print("%s: %s" % (field_name, col))
+                Logger.info(f"{field_name}: {col}")
 
         if not copy_to_clipboard(password, "Password"):
-            if confirm_prompt("Copy failed. Display password?", cancel_message=""):
-                print("Password: %s" % password)
+            if confirm_prompt("Display password?", cancel_message=None):
+                Logger.info(f"Password: {password}")
 
     @staticmethod
     def edit(args):
@@ -396,12 +398,12 @@ class Vault:
         c = conn.cursor()
 
         vault_exists = c.execute(
-            "SELECT name FROM vaults WHERE name = ?", tuple([args.src_vault])
+            "SELECT name FROM vaults WHERE name = ?", (args.src_vault,)
         ).fetchone()
 
         if not vault_exists:
             conn.close()
-            raise ValueError("Vault '%s' does not exist." % args.src_vault)
+            raise ValueError(f"Vault '{args.src_vault}' does not exist.")
 
         login = c.execute(
             "SELECT * FROM logins WHERE name = ? AND vault = ?",
@@ -411,7 +413,7 @@ class Vault:
         if not login:
             conn.close()
             raise ValueError(
-                "Login '%s' does not exist in vault '%s'." % (args.name, args.src_vault)
+                f"Login '{args.name}' does not exist in vault '{args.src_vault}'."
             )
 
         edited_login = [args.name]
@@ -431,22 +433,22 @@ class Vault:
 
             edited_login.extend(
                 [
-                    input("[1/4] Username [%s]: " % login[1]) or login[1],
+                    input(f"[1/4] Username [{login[1]}]: ") or login[1],
                     getpass.getpass("[2/4] Password [*****]: ") or login[2],
-                    input("[3/4] Email [%s]: " % login[3]) or login[3],
-                    input("[4/4] URL [%s]: " % login[4]) or login[4],
+                    input(f"[3/4] Email [{login[3]}]: ") or login[3],
+                    input(f"[4/4] URL [{login[4]}]: ") or login[4],
                     login[5],
                 ]
             )
 
         edited_login.append(login[6])
 
-        c.execute("DELETE FROM logins WHERE name = ?", tuple([args.name]))
+        c.execute("DELETE FROM logins WHERE name = ?", (args.name,))
         c.execute(
             "INSERT INTO logins VALUES (?, ?, ?, ?, ?, ?, ?)", tuple(edited_login)
         )
 
-        print("Edited login '%s' in vault '%s'" % (args.name, args.src_vault))
+        Logger.success(f"Edited login '{args.name}' in vault '{args.src_vault}'")
 
         conn.commit()
         conn.close()
@@ -458,28 +460,28 @@ class Vault:
 
         if args.mode == "vault":
 
-            t = tuple([args.name])
+            t = (args.name,)
             vault_exists = c.execute(
                 "SELECT name FROM vaults WHERE name = ?", t
             ).fetchone()
 
             if not vault_exists:
                 conn.close()
-                raise ValueError("Vault '%s' does not exist." % args.name)
+                raise ValueError(f"Vault '{args.name}' does not exist.")
 
             c.execute("DELETE FROM vaults WHERE name = ?", t)
             conn.commit()
             conn.close()
-            print("Deleted vault '%s'." % args.name)
+            Logger.success(f"Deleted vault '{args.name}'.")
             return
 
         vault_exists = c.execute(
-            "SELECT name FROM vaults WHERE name = ?", tuple([args.src_vault])
+            "SELECT name FROM vaults WHERE name = ?", (args.src_vault,)
         ).fetchone()
 
         if not vault_exists:
             conn.close()
-            raise ValueError("Vault '%s' does not exist." % args.src_vault)
+            raise ValueError(f"Vault '{args.src_vault}' does not exist.")
 
         t = (args.name, args.src_vault)
         login_exists = c.execute(
@@ -488,13 +490,14 @@ class Vault:
 
         if not login_exists:
             conn.close()
-            print("Login '%s' does not exist in vault '%s'." % t)
-            return
+            raise ValueError(
+                f"Login '{args.name}' does not exist in vault '{args.src_vault}'."
+            )
 
         c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
         conn.commit()
         conn.close()
-        print("Deleted login '%s' in vault '%s'." % t)
+        Logger.success(f"Deleted login '{args.name}' in vault '{args.src_vault}'.")
 
     @staticmethod
     def rename(args):
@@ -504,69 +507,58 @@ class Vault:
         if args.mode == "vault":
 
             vault_exists = c.execute(
-                "SELECT name FROM vaults WHERE name = ?", tuple([args.old_name])
+                "SELECT name FROM vaults WHERE name = ?", (args.old_name,)
             ).fetchone()
 
             if not vault_exists:
                 conn.close()
-                raise ValueError("Vault '%s' does not exists." % args.old_name)
+                raise ValueError(f"Vault '{args.old_name}' does not exists.")
 
-            t = tuple([args.new_name])
+            t = (args.new_name,)
             new_vault_exists = c.execute(
                 "SELECT name FROM vaults WHERE name = ?", t
             ).fetchone()
 
-            if new_vault_exists and not args.force:
-                if not confirm_prompt(
-                    "Overwrite existing vault '%s'" % args.new_name,
-                    "Vault rename canceled.",
+            if new_vault_exists:
+                if not args.force and not confirm_prompt(
+                    f"Overwrite existing vault '{args.new_name}'",
                 ):
                     return
-
                 c.execute("DELETE FROM vaults WHERE name = ?", t)
                 c.execute("DELETE FROM logins WHERE vault = ?", t)
-                print("Deleted vault '%s'." % args.new_name)
-
-            elif new_vault_exists and args.force:
-                c.execute("DELETE FROM vaults WHERE name = ?", t)
-                c.execute("DELETE FROM logins WHERE vault = ?", t)
-                print("Deleted vault '%s'." % args.new_name)
+                Logger.success(f"Deleted vault '{args.new_name}'.")
 
             t = (args.new_name, args.old_name)
             c.execute("UPDATE vaults SET name = ? WHERE name = ?", t)
             c.execute("UPDATE logins SET vault = ? WHERE vault = ?", t)
             conn.commit()
             conn.close()
-            print("Renamed vault '%s' to '%s'." % (args.old_name, args.new_name))
+            Logger.success(f"Renamed vault '{args.old_name}' to '{args.new_name}'.")
             return
 
         else:
             vault_exists = c.execute(
-                "SELECT name FROM vaults WHERE name = ?", tuple([args.src_vault])
+                "SELECT name FROM vaults WHERE name = ?", (args.src_vault,)
             ).fetchone()
 
             if not vault_exists:
                 conn.close()
-                raise ValueError("Vault '%s' does not exist." % args.src_vault)
+                raise ValueError(f"Vault '{args.src_vault}' does not exist.")
 
             t = (args.new_name, args.src_vault)
             new_login_exists = c.execute(
                 "SELECT name FROM logins WHERE name = ? AND vault = ?", t
             ).fetchone()
 
-            if new_login_exists and not args.force:
-                if not confirm_prompt(
-                    "Overwrite existing login '%s'" % args.new_name,
-                    "Login rename canceled.",
+            if new_login_exists:
+                if not args.force and not confirm_prompt(
+                    f"Overwrite existing login '{args.new_name}'",
                 ):
                     return
-
                 c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
-                print("Deleted login '%s' in vault '%s'." % t)
-
-            elif new_login_exists and args.force:
-                c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
-                print("Deleted login '%s' in vault '%s'." % t)
+                Logger.success(
+                    f"Deleted login '{args.new_name}' in vault '{args.src_vault}'."
+                )
 
             c.execute(
                 "UPDATE logins SET name = ? WHERE name = ? AND vault = ?",
@@ -575,9 +567,8 @@ class Vault:
 
             conn.commit()
             conn.close()
-            print(
-                "Renamed login '%s' to '%s' in vault '%s'."
-                % (args.old_name, args.new_name, args.src_vault)
+            Logger.success(
+                f"Renamed login '{args.old_name}' to '{args.new_name}' in vault '{args.src_vault}'."
             )
 
     @staticmethod
@@ -586,20 +577,20 @@ class Vault:
         c = conn.cursor()
 
         src_exists = c.execute(
-            "SELECT name FROM vaults WHERE name = ?", tuple([args.src_vault])
+            "SELECT name FROM vaults WHERE name = ?", (args.src_vault,)
         ).fetchone()
 
         if not src_exists:
             conn.close()
-            raise ValueError("Source vault '%s' does not exist." % args.src_vault)
+            raise ValueError(f"Source vault '{args.src_vault}' does not exist.")
 
         dest_exists = c.execute(
-            "SELECT name FROM vaults WHERE name = ?", tuple([args.dest_vault])
+            "SELECT name FROM vaults WHERE name = ?", (args.dest_vault,)
         ).fetchone()
 
         if not dest_exists:
             conn.close()
-            raise ValueError("Destination vault '%s' does not exist." % args.dest_vault)
+            raise ValueError(f"Destination vault '{args.dest_vault}' does not exist.")
 
         login_exists = c.execute(
             "SELECT name FROM logins WHERE name = ? AND vault = ?",
@@ -608,25 +599,20 @@ class Vault:
 
         if not login_exists:
             conn.close()
-            raise ValueError("Login '%s' does not exist." % args.name)
+            raise ValueError(f"Login '{args.name}' does not exist.")
 
         t = (args.name, args.dest_vault)
         dest_login_exists = c.execute(
             "SELECT name FROM logins WHERE name = ? AND vault = ?", t
         ).fetchone()
 
-        if dest_login_exists and not args.force:
-            if not confirm_prompt(
-                "Overwrite existing login '%s' in vault '%s'" % t, "Move canceled."
+        if dest_login_exists:
+            if not args.force and not confirm_prompt(
+                f"Overwrite existing login '{args.name}' in vault '{args.dest_vault}'",
             ):
                 return
-
             c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
-            print("Deleted login '%s' in vault '%s'" % t)
-
-        elif dest_login_exists and args.force:
-            c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
-            print("Deleted login '%s' in vault '%s'" % t)
+            Logger.success(f"Deleted login '{args.name}' in vault '{args.dest_vault}'")
 
         c.execute(
             "UPDATE logins SET vault = ? WHERE name = ? AND vault = ?",
@@ -634,9 +620,8 @@ class Vault:
         )
         conn.commit()
         conn.close()
-        print(
-            "Moved login '%s' from vault '%s' to vault '%s'."
-            % (args.name, args.src_vault, args.dest_vault)
+        Logger.success(
+            f"Moved login '{args.name}' from vault '{args.src_vault}' to vault '{args.dest_vault}'."
         )
 
     @staticmethod
@@ -686,33 +671,18 @@ class Vault:
                 (args.login, args.vault),
             ).fetchone()
 
-            if login_exists and not args.force:
-                if confirm_prompt(
-                    "Edit password for existing login '%s' in vault '%s'"
-                    % (args.login, args.vault),
-                    "Save canceled.",
+            if login_exists:
+                if not args.force and not confirm_prompt(
+                    f"Edit password for existing login '{args.login}' in vault '{args.vault}'"
                 ):
-                    c.execute(
-                        "UPDATE logins SET password = ? WHERE name = ? AND vault = ?",
-                        (password, args.login, args.vault),
-                    )
-                    print(
-                        "Edited password for login '%s' in vault '%s'"
-                        % (args.login, args.vault)
-                    )
-                    conn.commit()
-                    conn.close()
-                else:
                     return
 
-            elif login_exists and args.force:
                 c.execute(
                     "UPDATE logins SET password = ? WHERE name = ? AND vault = ?",
                     (password, args.login, args.vault),
                 )
-                print(
-                    "Edited password for login '%s' in vault '%s'"
-                    % (args.login, args.vault)
+                Logger.success(
+                    f"Edited password for login '{args.login}' in vault '{args.vault}'"
                 )
                 conn.commit()
                 conn.close()
@@ -728,20 +698,17 @@ class Vault:
                     args.vault,
                 )
                 c.execute("INSERT INTO logins VALUES (?, ?, ?, ?, ?, ?, ?)", login)
-                print("Saved new login '%s' in vault '%s'" % (args.login, args.vault))
+                Logger.success(
+                    f"Saved new login '{args.login}' in vault '{args.vault}'"
+                )
                 conn.commit()
                 conn.close()
 
         if not copy_to_clipboard(password, "Generated password"):
-            if confirm_prompt(
-                "Copy failed. Print password to console?", cancel_message=""
-            ):
-                print("Password: " + password)
+            if confirm_prompt("Print password to console?", cancel_message=None):
+                Logger.info(f"Password: {password}")
             else:
                 return
-
-        else:
-            print("Password copied to clipboard.")
 
     @staticmethod
     def login(args):
@@ -749,29 +716,30 @@ class Vault:
         c = conn.cursor()
 
         src_exists = c.execute(
-            "SELECT name FROM vaults WHERE name = ?", tuple([args.src_vault])
+            "SELECT name FROM vaults WHERE name = ?", (args.src_vault,)
         ).fetchone()
 
         if not src_exists:
             conn.close()
-            raise ValueError("Source vault '%s' does not exist." % args.src_vault)
+            raise ValueError(f"Source vault '{args.src_vault}' does not exist.")
 
-        t = (args.login_name, args.src_vault)
         login = c.execute(
             "SELECT username, password, url FROM logins WHERE name = ? AND vault = ?",
-            t,
+            (args.login_name, args.src_vault),
         ).fetchone()
 
         if not login:
             conn.close()
-            raise ValueError("Login '%s' does not exist in vault '%s'." % t)
+            raise ValueError(
+                f"Login '{args.login_name}' does not exist in vault '{args.src_vault}'."
+            )
 
         conn.close()
 
-        print("Username: " + login[0])
+        Logger.info(f"Username: {login[0]}")
         if not copy_to_clipboard(login[1], "Password"):
-            if confirm_prompt("Copy failed. Display password?", cancel_message=""):
-                print("Password: " + login[1])
+            if confirm_prompt("Display password?", cancel_message=None):
+                Logger.info(f"Password: {login[1]}")
 
         # Open URL in browser
         if login[2]:  # Only if URL exists
@@ -783,10 +751,10 @@ class Vault:
     @staticmethod
     def config(args):
         if args.list:
-            for section_name in Vault.cfg.sections():
-                print("%s" % section_name)
-                for name, value in Vault.cfg.items(section_name):
-                    print("     %s.%s = %s" % (section_name, name, value))
+            for section in Vault.cfg.sections():
+                Logger.info(section)
+                for key, value in Vault.cfg.items(section):
+                    Logger.info(f"    {section}.{key} = {value}")
             return
 
         if args.option_string is None:
@@ -799,42 +767,42 @@ class Vault:
         if len(option_list) == 1:
             option_list = ["vault"] + option_list
 
-        (section, option) = option_list
+        (section, key) = option_list
 
-        if not Vault.cfg.has_option(section, option):
-            raise ValueError("No %s.%s option found in configs." % (section, option))
+        if not Vault.cfg.has_option(section, key):
+            raise ValueError(f"No {section}.{key} option found in configs.")
 
         if args.get or args.value is None:
-            value = Vault.cfg.get(section, option)
-            print(value)
+            value = Vault.cfg.get(section, key)
+            Logger.info(value)
             return
 
-        Vault.cfg.set(section, option, args.value)
-        print("Set %s.%s to %s" % (section, option, args.value))
+        Vault.cfg.set(section, key, args.value)
+        Logger.success(f"Set {section}.{key} to {args.value}")
         Vault.cfg.save()
 
     @staticmethod
-    def lock(_):
+    def lock(_=None):
         unlocked = os.path.ismount(Vault.cfg.mount_path)
         if not unlocked:
-            print("Vaults are already locked.")
+            Logger.success("Vaults are already locked.")
             return
 
         subprocess.call(["diskutil", "unmount", Vault.cfg.mount_path])
 
         device = Vault._get_image_device()
         if not device:
-            print("WARNING: No device nodes found for the vault image.")
+            Logger.warning("No device nodes found for the vault image.")
             return
         subprocess.call(["hdiutil", "detach", device])
 
         if os.path.isfile(Vault.cfg.session_path):
             os.remove(Vault.cfg.session_path)
 
-        print("Locked vaults.")
+        Logger.success("Locked vaults.")
 
     @staticmethod
-    def unlock(_):
+    def unlock(_=None):
         unlock = subprocess.call(
             [
                 "hdiutil",
@@ -844,37 +812,32 @@ class Vault:
                 Vault.cfg.img_path,
             ]
         )
-        print("Unlock: %s" % unlock)
         if unlock == 0:
-            print("Unlocked vaults.")
+            Logger.success("Unlocked vaults.")
             Vault._update_session()
 
 
 args = parser.parse_args()
 unlocked = os.path.ismount(Vault.cfg.mount_path)
-dmgExists = os.path.isfile(Vault.cfg.img_path)
-
-if not unlocked and args.command != "unlock" and dmgExists:
-    print("Vaults are locked. To unlock them, run: vault unlock")
-    sys.exit(2)
-
-if args.command == None:
-    print("\nNo command specified.\n")
-    parser.print_help()
-    sys.exit(2)
+dmgExists = unlocked or os.path.isfile(Vault.cfg.img_path)
 
 if not hasattr(Vault, args.command):
-    print("\nUnknown command: %s\n" % args.command)
-    parser.print_help()
-    sys.exit(2)
+    parser.error(f"Missing command handler for '{args.command}' command.")
 
 try:
+    if not unlocked and args.command != "unlock" and dmgExists:
+        confirm_unlock = confirm_prompt(
+            "Vaults are locked. Do you want to unlock them?", cancel_message=None
+        )
+        if confirm_unlock:
+            Vault.unlock()
+        else:
+            parser.error("Vaults are locked. Run 'vault unlock' to unlock them.")
+
     fn = getattr(Vault, args.command)
     fn(args)
-except (KeyboardInterrupt, SystemExit):
-    print("\nOperation canceled.")
-    sys.exit(0)
-except (ValueError, IOError):
-    print("\nError: %s\n" % sys.exc_info()[1])
-    parser.print_help()
-    sys.exit(2)
+except KeyboardInterrupt:
+    Logger.info("Operation cancelled")
+    sys.exit(130)
+except (ValueError, IOError) as e:
+    parser.error(e)
