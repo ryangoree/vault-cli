@@ -123,7 +123,7 @@ class VaultConfig:
 class Vault:
     cmd_path = os.path.dirname(os.path.realpath(__file__))
     config_path = os.path.abspath(cmd_path + "/vault.cfg")
-    user_config = VaultConfig(config_path)
+    cfg = VaultConfig(config_path)
 
     @staticmethod
     def _get_image_device():
@@ -134,29 +134,27 @@ class Vault:
                     "attach",
                     "-plist",
                     "-mountpoint",
-                    Vault.user_config.mount_path,
-                    Vault.user_config.img_path,
+                    Vault.cfg.mount_path,
+                    Vault.cfg.img_path,
                 ]
             )
         )["system-entities"][0].get("dev-entry")
 
     @staticmethod
     def _update_session():
-        with open(Vault.user_config.session_path, "w") as f:
+        with open(Vault.cfg.session_path, "w") as f:
             f.write(str(time.time()))
 
     @staticmethod
     def _ensure_session_valid():
         is_valid = False
-        session_exists = os.path.isfile(Vault.user_config.session_path)
+        session_exists = os.path.isfile(Vault.cfg.session_path)
 
         if session_exists:
             try:
-                with open(Vault.user_config.session_path, "r") as f:
+                with open(Vault.cfg.session_path, "r") as f:
                     last_activity = float(f.read().strip())
-                is_valid = (
-                    time.time() - last_activity
-                ) < Vault.user_config.session_timeout
+                is_valid = (time.time() - last_activity) < Vault.cfg.session_timeout
             except (ValueError, IOError):
                 pass
 
@@ -164,7 +162,7 @@ class Vault:
             Vault._update_session()
         else:
             if session_exists:
-                os.remove(Vault.user_config.session_path)
+                os.remove(Vault.cfg.session_path)
             print("Session expired. Vault has been locked.")
             Vault.lock(None)
             sys.exit(2)
@@ -172,12 +170,12 @@ class Vault:
     @staticmethod
     def _get_validated_connection():
         Vault._ensure_session_valid()
-        conn = sqlite3.connect(Vault.user_config.db_path)
+        conn = sqlite3.connect(Vault.cfg.db_path)
         return conn
 
     @staticmethod
     def init(args):
-        img_exists = os.path.isfile(Vault.user_config.img_path)
+        img_exists = os.path.isfile(Vault.cfg.img_path)
 
         if not img_exists:
             subprocess.call(
@@ -196,13 +194,13 @@ class Vault:
                     "AES-256",
                     "-agentpass",
                     "-attach",
-                    Vault.user_config.img_path,
+                    Vault.cfg.img_path,
                 ]
             )
         else:
             raise ValueError("vault has already been initiated.")
 
-        conn = sqlite3.connect(Vault.user_config.db_path)
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         c.execute("CREATE TABLE vaults(name text)")
@@ -649,16 +647,16 @@ class Vault:
         symbols = string.punctuation
 
         if args:
-            length = args.length or Vault.user_config.get("genpass", "length")
-            digits_count = args.digits or Vault.user_config.get("genpass", "digits")
-            symbols_count = args.symbols or Vault.user_config.get("genpass", "symbols")
+            length = args.length or Vault.cfg.get("genpass", "length")
+            digits_count = args.digits or Vault.cfg.get("genpass", "digits")
+            symbols_count = args.symbols or Vault.cfg.get("genpass", "symbols")
             length = int(length)
             digits_count = int(digits_count)
             symbols_count = int(symbols_count)
         else:
-            length = int(Vault.user_config.get("genpass", "length"))
-            digits_count = int(Vault.user_config.get("genpass", "digits"))
-            symbols_count = int(Vault.user_config.get("genpass", "symbols"))
+            length = int(Vault.cfg.get("genpass", "length"))
+            digits_count = int(Vault.cfg.get("genpass", "digits"))
+            symbols_count = int(Vault.cfg.get("genpass", "symbols"))
 
         letters_count = length - digits_count - symbols_count
 
@@ -785,9 +783,9 @@ class Vault:
     @staticmethod
     def config(args):
         if args.list:
-            for section_name in Vault.user_config.sections():
+            for section_name in Vault.cfg.sections():
                 print("%s" % section_name)
-                for name, value in Vault.user_config.items(section_name):
+                for name, value in Vault.cfg.items(section_name):
                     print("     %s.%s = %s" % (section_name, name, value))
             return
 
@@ -803,26 +801,26 @@ class Vault:
 
         (section, option) = option_list
 
-        if not Vault.user_config.has_option(section, option):
+        if not Vault.cfg.has_option(section, option):
             raise ValueError("No %s.%s option found in configs." % (section, option))
 
         if args.get or args.value is None:
-            value = Vault.user_config.get(section, option)
+            value = Vault.cfg.get(section, option)
             print(value)
             return
 
-        Vault.user_config.set(section, option, args.value)
+        Vault.cfg.set(section, option, args.value)
         print("Set %s.%s to %s" % (section, option, args.value))
-        Vault.user_config.save()
+        Vault.cfg.save()
 
     @staticmethod
     def lock(_):
-        unlocked = os.path.ismount(Vault.user_config.mount_path)
+        unlocked = os.path.ismount(Vault.cfg.mount_path)
         if not unlocked:
             print("Vaults are already locked.")
             return
 
-        subprocess.call(["diskutil", "unmount", Vault.user_config.mount_path])
+        subprocess.call(["diskutil", "unmount", Vault.cfg.mount_path])
 
         device = Vault._get_image_device()
         if not device:
@@ -830,8 +828,8 @@ class Vault:
             return
         subprocess.call(["hdiutil", "detach", device])
 
-        if os.path.isfile(Vault.user_config.session_path):
-            os.remove(Vault.user_config.session_path)
+        if os.path.isfile(Vault.cfg.session_path):
+            os.remove(Vault.cfg.session_path)
 
         print("Locked vaults.")
 
@@ -842,8 +840,8 @@ class Vault:
                 "hdiutil",
                 "attach",
                 "-mountpoint",
-                Vault.user_config.mount_path,
-                Vault.user_config.img_path,
+                Vault.cfg.mount_path,
+                Vault.cfg.img_path,
             ]
         )
         print("Unlock: %s" % unlock)
@@ -853,8 +851,8 @@ class Vault:
 
 
 args = parser.parse_args()
-unlocked = os.path.ismount(Vault.user_config.mount_path)
-dmgExists = os.path.isfile(Vault.user_config.img_path)
+unlocked = os.path.ismount(Vault.cfg.mount_path)
+dmgExists = os.path.isfile(Vault.cfg.img_path)
 
 if not unlocked and args.command != "unlock" and dmgExists:
     print("Vaults are locked. To unlock them, run: vault unlock")
