@@ -132,7 +132,6 @@ python3 vault.py config vault.session_timeout 600
 - Uses macOS `hdiutil` for AES-256 encrypted disk images
 - Master password required to mount/access data
 - Credentials stored in SQLite database within encrypted volume
-- No plaintext password storage
 - Session timeout for automatic locking
 - Clipboard integration minimizes password exposure
 
