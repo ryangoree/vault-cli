@@ -69,7 +69,7 @@ python3 vault.py open github
 - `rename` - Rename login or vault
 - `move` - Move login between vaults
 - `genpass` - Generate secure passwords
-- `login` - Open login URL in browser, show login details, and copy password
+- `login` - Open login URL in browser, show username, and copy password
 - `config` - View/edit configuration
 - `lock`/`unlock` - Lock/unlock vault
 
@@ -88,7 +88,7 @@ python3 vault.py new -v work
 # Add login to specific vault
 python3 vault.py new --in work slack
 
-# Open URL, show details, and copy password to clipboard
+# Open URL, show username, and copy password to clipboard
 python3 vault.py login github
 
 # Lock the vault when done

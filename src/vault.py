@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-#
-# Command line utility to generate and manage passwords
-#
-# help:
-#   vault -h
-#
-# To do:
-#   - Rewrite consistent helps
-
-from cli import Logger, parser
 import configparser
 import getpass
 import os
@@ -20,6 +10,7 @@ import subprocess
 import sys
 import time
 import webbrowser
+from cli import Logger, parser
 
 
 def confirm_prompt(message, cancel_message="Operation canceled.", default=False):
@@ -411,7 +402,7 @@ class Vault:
         for i, col in enumerate(login):
             field_name = columns[i][1]
             if field_name != "password":
-                Logger.info(f"{field_name}: {col}")
+                Logger.info(f"{Logger.bold(field_name)}: {col}")
 
     @staticmethod
     def open(args):
@@ -427,7 +418,7 @@ class Vault:
 
         if not copy_to_clipboard(password, "Password"):
             if confirm_prompt("Display password?", cancel_message=None):
-                Logger.info(f"Password: {password}")
+                Logger.info(f"{Logger.bold('Password')}: {password}")
 
     @staticmethod
     def edit(args):
@@ -743,7 +734,7 @@ class Vault:
 
         if not copy_to_clipboard(password, "Generated password"):
             if confirm_prompt("Print password to console?", cancel_message=None):
-                Logger.info(f"Password: {password}")
+                Logger.info(f"{Logger.bold('Password')}: {password}")
             else:
                 return
 
@@ -773,10 +764,10 @@ class Vault:
 
         conn.close()
 
-        Logger.info(f"Username: {login[0]}")
+        Logger.info(f"{Logger.bold('Username')}: {login[0]}")
         if not copy_to_clipboard(login[1], "Password"):
             if confirm_prompt("Display password?", cancel_message=None):
-                Logger.info(f"Password: {login[1]}")
+                Logger.info(f"{Logger.bold('Password')}: {login[1]}")
 
         # Open URL in browser
         if login[2]:  # Only if URL exists
@@ -791,7 +782,10 @@ class Vault:
             for section in Vault.cfg.sections():
                 Logger.info(section, bold=True)
                 for key, value in Vault.cfg.items(section):
-                    Logger.info(f"  {section}.{key} = {value}")
+                    if section == "vault":
+                        Logger.info(f"  {Logger.bold(key)} = {value}")
+                    else:
+                        Logger.info(f"  {Logger.bold(f'{(section)}.{key}')} = {value}")
             return
 
         if args.option_string is None:
