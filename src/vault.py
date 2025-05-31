@@ -80,25 +80,23 @@ class VaultConfig:
 
     @property
     def db_path(self):
-        return self._config.get("vault", "db_path")
+        return self.get("vault", "db_path")
 
     @property
     def img_path(self):
-        return self._config.get("vault", "img_path")
+        return self.get("vault", "img_path")
 
     @property
     def mount_path(self):
-        return self._config.get("vault", "mount_path")
+        return self.get("vault", "mount_path")
 
     @property
     def session_path(self):
-        return self._config.get("vault", "session_path")
+        return self.get("vault", "session_path")
 
     @property
     def session_timeout(self):
-        timeout_str = self._config.get("vault", "session_timeout")
-        timeout_value = timeout_str.split("#")[0].split(";")[0].strip()
-        return int(timeout_value)
+        return int(self.get("vault", "session_timeout"))
 
     def has_option(self, section, key):
         return self._config.has_option(section, key)
@@ -110,7 +108,8 @@ class VaultConfig:
         return self._config.sections()
 
     def get(self, section, key):
-        return self._config.get(section, key)
+        raw = self._config.get(section, key)
+        return raw.split("#")[0].split(";")[0].strip()
 
     def set(self, section, key, value):
         self._config.set(section, key, value)
