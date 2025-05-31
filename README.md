@@ -62,7 +62,8 @@ python3 vault.py open github
 - `init` - Initialize vault with encrypted storage
 - `new` - Create new login or vault
 - `list` - List all vaults or logins in a vault
-- `open` - Display login details (copies password to clipboard)
+- `peek` - Display login details
+- `open` - Display login details + copy password to clipboard
 - `edit` - Edit existing login
 - `delete` - Delete login or vault
 - `rename` - Rename login or vault

@@ -22,25 +22,22 @@ import time
 import webbrowser
 
 
-def confirm_prompt(message, cancel_message="Operation canceled.", default_no=True):
-    suffix = " [y/N]?" if default_no else " [Y/n]?"
+def confirm_prompt(message, cancel_message="Operation canceled.", default=False):
+    suffix = " [Y/n]?" if default else " [y/N]?"
 
     def ask():
         try:
             response = input(message + suffix).lower().strip()
         except (EOFError, KeyboardInterrupt):
+            print()
             if cancel_message:
                 Logger.warning(cancel_message)
-            else:
-                print()
             return False
-        if default_no and (response == "" or response.startswith("n")):
+        if not default and (response == "" or response.startswith("n")):
             if cancel_message:
                 Logger.warning(cancel_message)
-            else:
-                print()
             return False
-        elif not default_no and (response == "" or response.startswith("y")):
+        elif default and (response == "" or response.startswith("y")):
             return True
         elif response in ["y", "yes", "n", "no"]:
             return response.startswith("y")
@@ -108,7 +105,9 @@ class VaultConfig:
 
     @property
     def session_timeout(self):
-        return self._config.getint("vault", "session_timeout")
+        timeout_str = self._config.get("vault", "session_timeout")
+        timeout_value = timeout_str.split("#")[0].split(";")[0].strip()
+        return int(timeout_value)
 
     def has_option(self, section, key):
         return self._config.has_option(section, key)
@@ -174,7 +173,9 @@ class Vault:
             if session_exists:
                 os.remove(Vault.cfg.session_path)
             Vault.lock()
-            raise PermissionError("Session expired. Vault has been locked.")
+            raise PermissionError(
+                "Session expired. Vault has been locked. Run 'vault unlock' to unlock it."
+            )
 
     @staticmethod
     def _get_validated_connection():
@@ -232,6 +233,7 @@ class Vault:
         conn.commit()
         conn.close()
         Vault._update_session()
+        Logger.success("Vault initialized successfully.")
 
     @staticmethod
     def new(args):
@@ -262,6 +264,7 @@ class Vault:
         if not vault_exists:
             if not confirm_prompt(
                 f"Vault '{args.dest_vault}' does not exist. Do you want to create it",
+                default=True,
             ):
                 return
 
@@ -282,17 +285,29 @@ class Vault:
             c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
             action[0] = "Overwrote"
 
-        questions_length = 3 if args.genpass else 4
-        question_index = [1]
+        questions_length = 4
+        question_index = [0]
 
         def increment_question():
             question_index[0] += 1
             return question_index[0]
 
-        login = [args.name, input(f"[1/{questions_length}] Username: ")]
+        login = [args.name]
+
+        if args.username:
+            login.append(args.username)
+            questions_length -= 1
+        else:
+            login.append(
+                input(f"[{increment_question()}/{questions_length}] Username: ")
+            )
 
         if args.genpass:
             login.append(Vault.genpass())
+            questions_length -= 1
+        elif args.password:
+            login.append(args.password)
+            questions_length -= 1
         else:
             login.append(
                 getpass.getpass(
@@ -300,10 +315,20 @@ class Vault:
                 )
             )
 
+        if args.email:
+            login.append(args.email)
+            questions_length -= 1
+        else:
+            login.append(input(f"[{increment_question()}/{questions_length}] Email: "))
+
+        if args.url:
+            login.append(args.url)
+            questions_length -= 1
+        else:
+            login.append(input(f"[{increment_question()}/{questions_length}] URL: "))
+
         login.extend(
             [
-                input(f"[{increment_question()}/{questions_length}] Email: "),
-                input(f"[{increment_question()}/{questions_length}] URL: "),
                 args.notes,
                 args.dest_vault,
             ]
@@ -352,10 +377,12 @@ class Vault:
                     "SELECT name FROM logins WHERE vault = ?", tuple([vault[0]])
                 ).fetchall()
             )
-            Logger.info(f"{vault[0]} ({login_count})")
+            Logger.info(f"{Logger.bold(vault[0])} ({login_count})")
+
+        conn.close()
 
     @staticmethod
-    def open(args):
+    def peek(args):
         conn = Vault._get_validated_connection()
         c = conn.cursor()
 
@@ -372,6 +399,7 @@ class Vault:
             (args.name, args.src_vault),
         ).fetchone()
         columns = c.execute("PRAGMA table_info(logins)").fetchall()
+        conn.close()
 
         if not login:
             conn.close()
@@ -379,14 +407,23 @@ class Vault:
                 f"Login '{args.name}' does not exist in vault '{args.src_vault}'."
             )
 
-        # Display all fields, but copy password to clipboard instead of showing
-        password = ""
+        # Display all fields except password
         for i, col in enumerate(login):
             field_name = columns[i][1]
-            if field_name == "password":
-                password = col
-            else:
+            if field_name != "password":
                 Logger.info(f"{field_name}: {col}")
+
+    @staticmethod
+    def open(args):
+        Vault.peek(args)
+
+        conn = Vault._get_validated_connection()
+        c = conn.cursor()
+        password = c.execute(
+            "SELECT password FROM logins WHERE name = ? AND vault = ?",
+            (args.name, args.src_vault),
+        ).fetchone()[0]
+        conn.close()
 
         if not copy_to_clipboard(password, "Password"):
             if confirm_prompt("Display password?", cancel_message=None):
@@ -752,9 +789,9 @@ class Vault:
     def config(args):
         if args.list:
             for section in Vault.cfg.sections():
-                Logger.info(section)
+                Logger.info(section, bold=True)
                 for key, value in Vault.cfg.items(section):
-                    Logger.info(f"    {section}.{key} = {value}")
+                    Logger.info(f"  {section}.{key} = {value}")
             return
 
         if args.option_string is None:
@@ -770,7 +807,7 @@ class Vault:
         (section, key) = option_list
 
         if not Vault.cfg.has_option(section, key):
-            raise ValueError(f"No {section}.{key} option found in configs.")
+            raise ValueError(f"Invalid config option: '{section}.{key}'")
 
         if args.get or args.value is None:
             value = Vault.cfg.get(section, key)
@@ -803,18 +840,22 @@ class Vault:
 
     @staticmethod
     def unlock(_=None):
-        unlock = subprocess.call(
-            [
-                "hdiutil",
-                "attach",
-                "-mountpoint",
-                Vault.cfg.mount_path,
-                Vault.cfg.img_path,
-            ]
-        )
-        if unlock == 0:
-            Logger.success("Unlocked vaults.")
-            Vault._update_session()
+        unlocked = os.path.ismount(Vault.cfg.mount_path)
+        if unlocked:
+            Logger.success("Vaults are already unlocked.")
+        else:
+            unlock = subprocess.call(
+                [
+                    "hdiutil",
+                    "attach",
+                    "-mountpoint",
+                    Vault.cfg.mount_path,
+                    Vault.cfg.img_path,
+                ]
+            )
+            if unlock == 0:
+                Logger.success("Unlocked vaults.")
+        Vault._update_session()
 
 
 args = parser.parse_args()
@@ -824,6 +865,10 @@ dmgExists = unlocked or os.path.isfile(Vault.cfg.img_path)
 if not hasattr(Vault, args.command):
     parser.error(f"Missing command handler for '{args.command}' command.")
 
+if not dmgExists and args.command != "init":
+    Logger.error("Vault image does not exist. Run 'vault init' to create it.")
+    sys.exit(1)
+
 try:
     if not unlocked and args.command != "unlock" and dmgExists:
         confirm_unlock = confirm_prompt(
@@ -832,12 +877,21 @@ try:
         if confirm_unlock:
             Vault.unlock()
         else:
-            parser.error("Vaults are locked. Run 'vault unlock' to unlock them.")
+            raise PermissionError(
+                "Vaults are locked. Run 'vault unlock' to unlock them."
+            )
 
     fn = getattr(Vault, args.command)
     fn(args)
+except PermissionError as e:
+    Logger.error(e)
+    sys.exit(1)
 except KeyboardInterrupt:
     Logger.info("Operation cancelled")
     sys.exit(130)
 except (ValueError, IOError) as e:
-    parser.error(e)
+    Logger.error(e)
+    sys.exit(1)
+except Exception as e:
+    Logger.error(f"An unexpected error occurred: {e}")
+    sys.exit(1)

@@ -15,26 +15,80 @@ class Logger:
         RESET = "\033[0m"
 
     @staticmethod
-    def info(msg):
-        """Prints an informational message in blue."""
-        print(f"{Logger.Colors.BLUE}ℹ︎{Logger.Colors.RESET} {msg}")
+    def red(text, reset=True):
+        """Makes text red."""
+        return f"{Logger.Colors.RED}{text}{Logger.Colors.RESET if reset else ''}"
 
     @staticmethod
-    def success(msg):
-        """Prints a success message in green."""
-        print(f"{Logger.Colors.GREEN}✓{Logger.Colors.RESET} {msg}")
+    def green(text, reset=True):
+        """Makes text green."""
+        return f"{Logger.Colors.GREEN}{text}{Logger.Colors.RESET if reset else ''}"
 
     @staticmethod
-    def warning(msg):
-        """Prints a warning message in yellow."""
-        print(f"{Logger.Colors.YELLOW}⚠︎{Logger.Colors.RESET} {msg}")
+    def yellow(text, reset=True):
+        """Makes text yellow."""
+        return f"{Logger.Colors.YELLOW}{text}{Logger.Colors.RESET if reset else ''}"
 
     @staticmethod
-    def error(msg):
-        """Prints an error message to stderr in red."""
-        print(
-            f"{Logger.Colors.RED}✖︎ Error:{Logger.Colors.RESET} {msg}", file=sys.stderr
-        )
+    def blue(text, reset=True):
+        """Makes text blue."""
+        return f"{Logger.Colors.BLUE}{text}{Logger.Colors.RESET if reset else ''}"
+
+    @staticmethod
+    def magenta(text, reset=True):
+        """Makes text magenta."""
+        return f"{Logger.Colors.MAGENTA}{text}{Logger.Colors.RESET if reset else ''}"
+
+    @staticmethod
+    def cyan(text, reset=True):
+        """Makes text cyan."""
+        return f"{Logger.Colors.CYAN}{text}{Logger.Colors.RESET if reset else ''}"
+
+    @staticmethod
+    def white(text, reset=True):
+        """Makes text white."""
+        return f"{Logger.Colors.WHITE}{text}{Logger.Colors.RESET if reset else ''}"
+
+    @staticmethod
+    def bold(text, reset=True):
+        """Makes text bold."""
+        return f"{Logger.Colors.BOLD}{text}{Logger.Colors.RESET if reset else ''}"
+
+    @staticmethod
+    def info(msg, bold=False):
+        """Prints an informational message."""
+        prefix = Logger.cyan("ℹ︎ ", reset=not bold)
+        if bold:
+            prefix = Logger.bold(prefix)
+            msg = Logger.bold(msg)
+        print(f"{prefix}{msg}")
+
+    @staticmethod
+    def success(msg, bold=False):
+        """Prints a success message."""
+        prefix = Logger.green("✓ ", reset=not bold)
+        if bold:
+            prefix = Logger.bold(prefix)
+            msg = Logger.bold(msg)
+        print(f"{prefix}{msg}")
+
+    @staticmethod
+    def warning(msg, bold=False):
+        """Prints a warning message."""
+        prefix = Logger.yellow("⚠︎ ", reset=not bold)
+        if bold:
+            prefix = Logger.bold(prefix)
+            msg = Logger.bold(msg)
+        print(f"{prefix}{msg}")
+
+    @staticmethod
+    def error(msg, bold=False):
+        """Prints an error message to stderr."""
+        prefix = Logger.red("✖︎ Error: ", reset=not bold)
+        if bold:
+            prefix = Logger.bold(prefix)
+            msg = Logger.bold(msg)
+        print(f"{prefix}{msg}")
 
 
 # Make the parser show the help msg when there's an error
@@ -69,6 +123,21 @@ init_parser.add_argument(
 # new
 new_parser = subparsers.add_parser("new", help="Create a new login or vault.")
 new_parser.add_argument(
+    "name",
+    action="store",
+    metavar="<login-name>",
+    help="Name the new login or vault.",
+)
+new_parser.add_argument(
+    "-v",
+    "--vault",
+    action="store_const",
+    dest="mode",
+    const="vault",
+    default="login",
+    help="Create a new vault instead of a login.",
+)
+new_parser.add_argument(
     "-f",
     "--force",
     action="store_true",
@@ -83,22 +152,36 @@ new_parser.add_argument(
     help="Generate a new password for the new login.",
 )
 new_parser.add_argument(
-    "-i",
-    "--in",
+    "-u",
+    "--username",
     action="store",
-    dest="dest_vault",
-    default="_main",
-    metavar="<vault-name>",
-    help="Save new login in specified vault.",
+    dest="username",
+    metavar="<username>",
+    help="Edit the username of a login specifically.",
 )
 new_parser.add_argument(
-    "-v",
-    "--vault",
-    action="store_const",
-    dest="mode",
-    const="vault",
-    default="login",
-    help="Create a new vault instead of a login.",
+    "-e",
+    "--email",
+    action="store",
+    dest="email",
+    metavar="<email>",
+    help="The email for the new login.",
+)
+new_parser.add_argument(
+    "-p",
+    "--password",
+    action="store",
+    dest="password",
+    metavar="<password>",
+    help="The password for the new login.",
+)
+new_parser.add_argument(
+    "-r",
+    "--url",
+    action="store",
+    dest="url",
+    metavar="<url>",
+    help="The URL for the new login.",
 )
 new_parser.add_argument(
     "-n",
@@ -110,10 +193,13 @@ new_parser.add_argument(
     help="Add notes to the login.",
 )
 new_parser.add_argument(
-    "name",
+    "-i",
+    "--in",
     action="store",
-    metavar="<login-name>",
-    help="Name the new login or vault.",
+    dest="dest_vault",
+    default="_main",
+    metavar="<vault-name>",
+    help="Save new login in specified vault.",
 )
 
 # list
@@ -126,8 +212,30 @@ list_parser.add_argument(
     help="List logins in the specified vault.",
 )
 
+# peek
+peek_parser = subparsers.add_parser(
+    "peek", help="Peek at a login without copying the password."
+)
+peek_parser.add_argument(
+    "-i",
+    "--in",
+    action="store",
+    dest="src_vault",
+    default="_main",
+    metavar="<vault-name>",
+    help="Peek at a login in the specified vault.",
+)
+peek_parser.add_argument(
+    "name",
+    action="store",
+    metavar="<login-name>",
+    help="Name of the login to peek at.",
+)
+
 # open
-open_parser = subparsers.add_parser("open", help="Open a login.")
+open_parser = subparsers.add_parser(
+    "open", help="View a login and copy the password to clipboard."
+)
 open_parser.add_argument(
     "-i",
     "--in",
