@@ -18,7 +18,7 @@ def confirm_prompt(message, cancel_message="Operation canceled.", default=False)
 
     def ask():
         try:
-            response = input(message + suffix).lower().strip()
+            response = input(f"{message}{suffix}").lower().strip()
         except (EOFError, KeyboardInterrupt):
             print()
             if cancel_message:
@@ -68,8 +68,8 @@ class VaultConfig:
 
         self._config["vault"] = {
             "session_timeout": "900 # 15 mins in seconds",
-            "session_path": os.path.abspath(cmd_path + "/.vault_session"),
-            "img_path": os.path.abspath(cmd_path + "/vault.dmg"),
+            "session_path": os.path.abspath(f"{cmd_path}/.vault_session"),
+            "img_path": os.path.abspath(f"{cmd_path}/vault.dmg"),
             "mount_path": "/Volumes/vault",
             "db_path": "/Volumes/vault/vault.db",
         }
@@ -121,7 +121,7 @@ class VaultConfig:
 
 class Vault:
     cmd_path = os.path.dirname(os.path.realpath(__file__))
-    config_path = os.path.abspath(cmd_path + "/vault.cfg")
+    config_path = os.path.abspath(f"{cmd_path}/vault.cfg")
     cfg = VaultConfig(config_path)
 
     @staticmethod
@@ -772,7 +772,7 @@ class Vault:
         if login[2]:  # Only if URL exists
             url = login[2]
             if not url.startswith(("http://", "https://")):
-                url = "https://" + url
+                url = f"https://{url}"
             webbrowser.open(url)
 
     @staticmethod
