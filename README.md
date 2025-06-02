@@ -121,7 +121,6 @@ python3 vault.py config vault.session_timeout 600
 
 ## Files
 
-- `vault_py2.py` - Original Python 2 version
 - `vault.py` - Main application (Python 3 compatible with improvements)
 - `cli.py` - Argument parser (works with both versions)
 - `vault.cfg` - Configuration file (auto-generated)
