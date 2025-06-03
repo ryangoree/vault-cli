@@ -22,11 +22,11 @@ def confirm_prompt(message, cancel_message="Operation canceled.", default=False)
         except (EOFError, KeyboardInterrupt):
             print()
             if cancel_message:
-                Logger.warning(cancel_message)
+                Logger.warn(cancel_message)
             return False
         if not default and (response == "" or response.startswith("n")):
             if cancel_message:
-                Logger.warning(cancel_message)
+                Logger.warn(cancel_message)
             return False
         elif default and (response == "" or response.startswith("y")):
             return True
@@ -125,6 +125,14 @@ class Vault:
     cfg = VaultConfig(config_path)
 
     @staticmethod
+    def unlocked():
+        return os.path.ismount(Vault.cfg.mount_path)
+
+    @staticmethod
+    def dmgExists():
+        return Vault.unlocked() or os.path.isfile(Vault.cfg.img_path)
+
+    @staticmethod
     def _get_image_device():
         return plistlib.loads(
             subprocess.check_output(
@@ -145,36 +153,35 @@ class Vault:
             f.write(str(time.time()))
 
     @staticmethod
-    def _ensure_session_valid():
-        is_valid = False
+    def _validate_session():
         session_exists = os.path.isfile(Vault.cfg.session_path)
+        if not session_exists:
+            Vault.lock()
+            raise PermissionError("No active session found.")
 
-        if session_exists:
-            try:
-                with open(Vault.cfg.session_path, "r") as f:
-                    last_activity = float(f.read().strip())
-                is_valid = (time.time() - last_activity) < Vault.cfg.session_timeout
-            except (ValueError, IOError):
-                pass
+        is_valid = False
+        try:
+            with open(Vault.cfg.session_path, "r") as f:
+                last_activity = float(f.read().strip())
+            is_valid = (time.time() - last_activity) < Vault.cfg.session_timeout
+        except Exception:
+            pass
 
         if is_valid:
             Vault._update_session()
         else:
-            if session_exists:
-                os.remove(Vault.cfg.session_path)
             Vault.lock()
-            raise PermissionError(
-                "Session expired. Vault has been locked. Run 'vault unlock' to unlock it."
-            )
+            raise PermissionError("Session expired.")
 
     @staticmethod
-    def _get_validated_connection():
-        Vault._ensure_session_valid()
-        conn = sqlite3.connect(Vault.cfg.db_path)
-        return conn
+    def run_command(args):
+        if not hasattr(Vault, args.command):
+            raise ValueError(f"Missing handler for '{args.command}' command.")
+        fn = getattr(Vault, args.command)
+        return fn(args)
 
     @staticmethod
-    def init(args):
+    def init(args=None):
         img_exists = os.path.isfile(Vault.cfg.img_path)
 
         if not img_exists:
@@ -216,7 +223,7 @@ class Vault:
             vault text)"""
         )
 
-        if args.vaults:
+        if args and args.vaults:
             for vault in args.vaults:
                 c.execute("INSERT INTO vaults VALUES (?)", (vault,))
 
@@ -227,7 +234,7 @@ class Vault:
 
     @staticmethod
     def new(args):
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         if args.mode == "vault":
@@ -339,7 +346,7 @@ class Vault:
 
     @staticmethod
     def list(args):
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         if args.src_vault:
@@ -373,7 +380,7 @@ class Vault:
 
     @staticmethod
     def peek(args):
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         vault_exists = c.execute(
@@ -407,7 +414,7 @@ class Vault:
     def open(args):
         Vault.peek(args)
 
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
         password = c.execute(
             "SELECT password FROM logins WHERE name = ? AND vault = ?",
@@ -421,7 +428,7 @@ class Vault:
 
     @staticmethod
     def edit(args):
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         vault_exists = c.execute(
@@ -482,7 +489,7 @@ class Vault:
 
     @staticmethod
     def delete(args):
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         if args.mode == "vault":
@@ -528,7 +535,7 @@ class Vault:
 
     @staticmethod
     def rename(args):
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         if args.mode == "vault":
@@ -600,7 +607,7 @@ class Vault:
 
     @staticmethod
     def move(args):
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         src_exists = c.execute(
@@ -673,8 +680,15 @@ class Vault:
         letters_count = length - digits_count - symbols_count
 
         if letters_count < 0:
-            symbols_count -= digits_count + symbols_count - length
+            Logger.warn(
+                f"Length {length} is too short for {digits_count} digits and {symbols_count} symbols."
+            )
+            digits_count -= -letters_count >> 1  # -= overflow.divDown(2)
+            symbols_count = length - digits_count
             letters_count = 0
+            Logger.warn(
+                f"Adjusted counts: {letters_count} letters, {digits_count} digits, {symbols_count} symbols."
+            )
 
         # create a string with random letters, digits, and symbols
         password = (
@@ -690,7 +704,7 @@ class Vault:
             return password
 
         if args.login:
-            conn = Vault._get_validated_connection()
+            conn = sqlite3.connect(Vault.cfg.db_path)
             c = conn.cursor()
 
             login_exists = c.execute(
@@ -739,7 +753,7 @@ class Vault:
 
     @staticmethod
     def login(args):
-        conn = Vault._get_validated_connection()
+        conn = sqlite3.connect(Vault.cfg.db_path)
         c = conn.cursor()
 
         src_exists = c.execute(
@@ -779,12 +793,12 @@ class Vault:
     def config(args):
         if args.list:
             for section in Vault.cfg.sections():
-                Logger.info(section, bold=True)
+                print(Logger.underline(Logger.cyan(section)))
                 for key, value in Vault.cfg.items(section):
                     if section == "vault":
-                        Logger.info(f"  {Logger.bold(key)} = {value}")
+                        print(f"  {Logger.bold(key)} = {value}")
                     else:
-                        Logger.info(f"  {Logger.bold(f'{(section)}.{key}')} = {value}")
+                        print(f"  {Logger.bold(f'{(section)}.{key}')} = {value}")
             return
 
         if args.option_string is None:
@@ -812,24 +826,26 @@ class Vault:
         Vault.cfg.save()
 
     @staticmethod
-    def lock(_=None):
+    def lock(args=None):
         unlocked = os.path.ismount(Vault.cfg.mount_path)
         if not unlocked:
-            Logger.success("Vaults are already locked.")
+            if args != None:
+                Logger.success("Vaults are already locked.")
             return
 
         subprocess.call(["diskutil", "unmount", Vault.cfg.mount_path])
 
         device = Vault._get_image_device()
         if not device:
-            Logger.warning("No device nodes found for the vault image.")
+            Logger.warn("No device nodes found for the vault image.")
             return
         subprocess.call(["hdiutil", "detach", device])
 
         if os.path.isfile(Vault.cfg.session_path):
             os.remove(Vault.cfg.session_path)
 
-        Logger.success("Locked vaults.")
+        if args != None:
+            Logger.success("Locked vaults.")
 
     @staticmethod
     def unlock(_=None):
@@ -852,39 +868,42 @@ class Vault:
 
 
 args = parser.parse_args()
-unlocked = os.path.ismount(Vault.cfg.mount_path)
-dmgExists = unlocked or os.path.isfile(Vault.cfg.img_path)
-
-if not hasattr(Vault, args.command):
-    parser.error(f"Missing command handler for '{args.command}' command.")
-
-if not dmgExists and args.command != "init":
-    Logger.error("Vault image does not exist. Run 'vault init' to create it.")
-    sys.exit(1)
 
 try:
-    if not unlocked and args.command != "unlock" and dmgExists:
-        confirm_unlock = confirm_prompt(
-            "Vaults are locked. Do you want to unlock them?", cancel_message=None
-        )
-        if confirm_unlock:
-            Vault.unlock()
+    if args.command != "init" and not Vault.dmgExists():
+        if confirm_prompt(
+            "Vault image does not exist. Do you want to create it?",
+            cancel_message=None,
+            default=True,
+        ):
+            Vault.init()
         else:
-            raise PermissionError(
-                "Vaults are locked. Run 'vault unlock' to unlock them."
+            raise ValueError(
+                "Vault image does not exist. Run 'vault init' to create it."
             )
+    elif args.command not in ["lock", "unlock"]:
+        Vault._validate_session()
 
-    fn = getattr(Vault, args.command)
-    fn(args)
+    Vault.run_command(args)
+
 except PermissionError as e:
     Logger.error(e)
-    sys.exit(1)
+    if not Vault.unlocked() and confirm_prompt(
+        "Vaults are locked. Do you want to unlock them?", cancel_message=None
+    ):
+        Vault.unlock()
+        Vault.run_command(args)
+    else:
+        sys.exit(1)
+
 except KeyboardInterrupt:
     Logger.info("Operation cancelled")
     sys.exit(130)
+
 except (ValueError, IOError) as e:
     Logger.error(e)
     sys.exit(1)
+
 except Exception as e:
     Logger.error(f"An unexpected error occurred: {e}")
     sys.exit(1)

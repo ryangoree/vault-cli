@@ -3,7 +3,12 @@ import sys
 
 
 class Logger:
-    class Colors:
+    # Formatting Syntax: ESC + CSI + SGR code + [; SGR code]* + m
+    #   - ESC character = `\033` (octal) / `\x1b` (hex) / `\u001b` (unicode)
+    #   - Control Sequence Introducer (CSI) = `[`
+    #   - Select Graphic Rendition (SGR) codes = `31m`, `32m`, etc.
+
+    class Format:
         RED = "\033[31m"
         GREEN = "\033[32m"
         YELLOW = "\033[33m"
@@ -11,83 +16,112 @@ class Logger:
         MAGENTA = "\033[35m"
         CYAN = "\033[36m"
         WHITE = "\033[37m"
+        DEFAULT = "\033[39m"
         BOLD = "\033[1m"
+        DIM = "\033[2m"
+        ITALIC = "\033[3m"
+        UNDERLINE = "\033[4m"
+        STRIKETHROUGH = "\033[9m"
         RESET = "\033[0m"
 
     @staticmethod
-    def red(text, reset=True):
-        """Makes text red."""
-        return f"{Logger.Colors.RED}{text}{Logger.Colors.RESET if reset else ''}"
+    def red(text):
+        """Formats text as red."""
+        return f"{Logger.Format.RED}{text}{Logger.Format.RESET}"
 
     @staticmethod
-    def green(text, reset=True):
-        """Makes text green."""
-        return f"{Logger.Colors.GREEN}{text}{Logger.Colors.RESET if reset else ''}"
+    def green(text):
+        """Formats text as green."""
+        return f"{Logger.Format.GREEN}{text}{Logger.Format.RESET}"
 
     @staticmethod
-    def yellow(text, reset=True):
-        """Makes text yellow."""
-        return f"{Logger.Colors.YELLOW}{text}{Logger.Colors.RESET if reset else ''}"
+    def yellow(text):
+        """Formats text as yellow."""
+        return f"{Logger.Format.YELLOW}{text}{Logger.Format.RESET}"
 
     @staticmethod
-    def blue(text, reset=True):
-        """Makes text blue."""
-        return f"{Logger.Colors.BLUE}{text}{Logger.Colors.RESET if reset else ''}"
+    def blue(text):
+        """Formats text as blue."""
+        return f"{Logger.Format.BLUE}{text}{Logger.Format.RESET}"
 
     @staticmethod
-    def magenta(text, reset=True):
-        """Makes text magenta."""
-        return f"{Logger.Colors.MAGENTA}{text}{Logger.Colors.RESET if reset else ''}"
+    def magenta(text):
+        """Formats text as magenta."""
+        return f"{Logger.Format.MAGENTA}{text}{Logger.Format.RESET}"
 
     @staticmethod
-    def cyan(text, reset=True):
-        """Makes text cyan."""
-        return f"{Logger.Colors.CYAN}{text}{Logger.Colors.RESET if reset else ''}"
+    def cyan(text):
+        """Formats text as cyan."""
+        return f"{Logger.Format.CYAN}{text}{Logger.Format.RESET}"
 
     @staticmethod
-    def white(text, reset=True):
-        """Makes text white."""
-        return f"{Logger.Colors.WHITE}{text}{Logger.Colors.RESET if reset else ''}"
+    def white(text):
+        """Formats text as white."""
+        return f"{Logger.Format.WHITE}{text}{Logger.Format.RESET}"
 
     @staticmethod
-    def bold(text, reset=True):
-        """Makes text bold."""
-        return f"{Logger.Colors.BOLD}{text}{Logger.Colors.RESET if reset else ''}"
+    def default(text):
+        """Formats text as default."""
+        return f"{Logger.Format.DEFAULT}{text}{Logger.Format.RESET}"
 
     @staticmethod
-    def info(msg, bold=False):
+    def bold(text):
+        """Formats text as bold."""
+        return f"{Logger.Format.BOLD}{text}{Logger.Format.RESET}"
+
+    @staticmethod
+    def dim(text):
+        """Formats text as dim."""
+        return f"{Logger.Format.DIM}{text}{Logger.Format.RESET}"
+
+    @staticmethod
+    def italic(text):
+        """Formats text as italic."""
+        return f"{Logger.Format.ITALIC}{text}{Logger.Format.RESET}"
+
+    @staticmethod
+    def underline(text):
+        """Formats text as underlined."""
+        return f"{Logger.Format.UNDERLINE}{text}{Logger.Format.RESET}"
+
+    def strikethrough(text):
+        """Formats text as strikethrough."""
+        return f"{Logger.Format.STRIKETHROUGH}{text}{Logger.Format.RESET}"
+
+    @staticmethod
+    def log(msg):
+        """Prints a log message."""
+        prefix = Logger.blue("✦ ")
+        print(f"{prefix}{msg}")
+
+    @staticmethod
+    def info(msg):
         """Prints an informational message."""
-        prefix = Logger.cyan("ℹ︎ ", reset=not bold)
-        if bold:
-            prefix = Logger.bold(prefix)
-            msg = Logger.bold(msg)
+        prefix = Logger.cyan("ℹ ")
         print(f"{prefix}{msg}")
 
     @staticmethod
-    def success(msg, bold=False):
+    def success(msg):
         """Prints a success message."""
-        prefix = Logger.green("✓ ", reset=not bold)
-        if bold:
-            prefix = Logger.bold(prefix)
-            msg = Logger.bold(msg)
+        prefix = Logger.green("✔︎ ")
         print(f"{prefix}{msg}")
 
     @staticmethod
-    def warning(msg, bold=False):
+    def warn(msg):
         """Prints a warning message."""
-        prefix = Logger.yellow("⚠︎ ", reset=not bold)
-        if bold:
-            prefix = Logger.bold(prefix)
-            msg = Logger.bold(msg)
+        prefix = Logger.yellow("⚠︎ ")
         print(f"{prefix}{msg}")
 
     @staticmethod
-    def error(msg, bold=False):
+    def debug(msg):
+        """Prints a debug message."""
+        prefix = Logger.yellow("⚙︎ debug: ")
+        print(f"{prefix}{msg}")
+
+    @staticmethod
+    def error(msg):
         """Prints an error message to stderr."""
-        prefix = Logger.red("✖︎ Error: ", reset=not bold)
-        if bold:
-            prefix = Logger.bold(prefix)
-            msg = Logger.bold(msg)
+        prefix = Logger.red("✖︎ error: ")
         print(f"{prefix}{msg}")
 
 
