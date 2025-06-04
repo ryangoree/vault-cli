@@ -23,39 +23,42 @@ A personal command-line password manager built in Python, designed for macOS.
 
 ## Quick Start
 
-### 1. Setup
-
-Make the script executable:
+### 1. Initialize your vault
 
 ```sh
-chmod +x vault.py
-```
-
-### 2. Initialize your vault
-
-```sh
-python3 vault.py init
+python vault.py init
 ```
 
 This will create an encrypted disk image and prompt for your master password.
 
-### 3. Create your first login
+### 2. Create your first login
 
 ```sh
-python3 vault.py new github
+python vault.py new github
 ```
 
-### 4. List your logins
+### 3. List your logins
 
 ```sh
-python3 vault.py list
+python vault.py list
 ```
 
-### 5. Open a login (shows details + copies password to clipboard)
+### 4. Open a login (shows details + copies password to clipboard)
 
 ```sh
-python3 vault.py open github
+python vault.py open github
 ```
+
+### 5. Add an alias (Optional)
+
+Add an alias to your shell’s startup file (e.g., `~/.zshrc`, `~/.bash_profile`,
+or whichever file your shell uses).
+
+```sh
+alias vault="python ~/path/to/vault-cli/src/vault.py"
+```
+
+Then you can use `vault` instead of `python vault.py` for all commands.
 
 ## Available Commands
 
@@ -77,22 +80,22 @@ python3 vault.py open github
 
 ```sh
 # Generate and save a password
-python3 vault.py genpass --save-as stackoverflow
+vault genpass --save-as stackoverflow
 
 # Create login with generated password
-python3 vault.py new -g reddit
+vault new -g reddit
 
 # Create a new vault for work logins
-python3 vault.py new -v work
+vault new -v work
 
 # Add login to specific vault
-python3 vault.py new --in work slack
+vault new --in work slack
 
 # Open URL, show username, and copy password to clipboard
-python3 vault.py login github
+vault login github
 
 # Lock the vault when done
-python3 vault.py lock
+vault lock
 ```
 
 ## Configuration
@@ -113,19 +116,11 @@ digits = 4
 symbols = 4
 ```
 
-Edit with: `python3 vault.py config <option> <value>`. For example:
+Edit with: `vault config <option> <value>`. For example:
 
 ```sh
-python3 vault.py config vault.session_timeout 600
+vault config genpass.length 20
 ```
-
-## Files
-
-- `vault.py` - Main application (Python 3 compatible with improvements)
-- `cli.py` - Argument parser (works with both versions)
-- `vault.cfg` - Configuration file (auto-generated)
-- `vault.dmg` - Encrypted disk image (created on init)
-- `vault.txt` - Original documentation with examples
 
 ## Security
 
@@ -140,6 +135,17 @@ python3 vault.py config vault.session_timeout 600
 - macOS (uses hdiutil for disk image encryption)
 - Python 3
 - Standard library only (no external dependencies)
+
+## Files
+
+- `vault.py` - Main application
+- `cli.py` - Argument parser
+- `config.py` - Configuration helper
+- `logger.py` - Custom logger
+- `utils.py` - Utility functions
+- `vault.cfg` - Configuration file (auto-generated)
+- `vault.dmg` - Encrypted disk image (created on init)
+- `vault.txt` - Original documentation with examples
 
 ---
 

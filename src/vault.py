@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import configparser
 import getpass
 import os
 import plistlib
@@ -10,113 +9,11 @@ import subprocess
 import sys
 import time
 import webbrowser
-from cli import Logger, parser
 
-
-def confirm_prompt(message, cancel_message="Operation canceled.", default=False):
-    suffix = " [Y/n]?" if default else " [y/N]?"
-
-    def ask():
-        try:
-            response = input(f"{message}{suffix}").lower().strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            if cancel_message:
-                Logger.warn(cancel_message)
-            return False
-        if not default and (response == "" or response.startswith("n")):
-            if cancel_message:
-                Logger.warn(cancel_message)
-            return False
-        elif default and (response == "" or response.startswith("y")):
-            return True
-        elif response in ["y", "yes", "n", "no"]:
-            return response.startswith("y")
-        else:
-            Logger.error("Invalid answer. Please enter y, yes, n, or no")
-            return ask()
-
-    return ask()
-
-
-def copy_to_clipboard(text, description="Text"):
-    try:
-        subprocess.run(["pbcopy"], input=text.encode(), check=True)
-        Logger.success(f"{description} copied to clipboard")
-        return True
-    except subprocess.CalledProcessError:
-        Logger.error(f"Failed to copy {description.lower()} to clipboard")
-        return False
-
-
-class VaultConfig:
-    def __init__(self, config_path):
-        self.config_path = config_path
-        self._config = None
-        self._load_config()
-
-    def _load_config(self):
-        self._config = configparser.ConfigParser()
-
-        if not os.path.isfile(self.config_path):
-            self._create_default_config()
-        else:
-            self._config.read(self.config_path)
-
-    def _create_default_config(self):
-        cmd_path = os.path.dirname(os.path.realpath(__file__))
-
-        self._config["vault"] = {
-            "session_timeout": "900 # 15 mins in seconds",
-            "session_path": os.path.abspath(f"{cmd_path}/.vault_session"),
-            "img_path": os.path.abspath(f"{cmd_path}/vault.dmg"),
-            "mount_path": "/Volumes/vault",
-            "db_path": "/Volumes/vault/vault.db",
-        }
-        self._config["genpass"] = {"length": "16", "digits": "4", "symbols": "4"}
-
-        self.save()
-        Logger.success(f"Created default config file at {self.config_path}")
-
-    @property
-    def db_path(self):
-        return self.get("vault", "db_path")
-
-    @property
-    def img_path(self):
-        return self.get("vault", "img_path")
-
-    @property
-    def mount_path(self):
-        return self.get("vault", "mount_path")
-
-    @property
-    def session_path(self):
-        return self.get("vault", "session_path")
-
-    @property
-    def session_timeout(self):
-        return int(self.get("vault", "session_timeout"))
-
-    def has_option(self, section, key):
-        return self._config.has_option(section, key)
-
-    def items(self, section):
-        return self._config.items(section)
-
-    def sections(self):
-        return self._config.sections()
-
-    def get(self, section, key):
-        raw = self._config.get(section, key)
-        return raw.split("#")[0].split(";")[0].strip()
-
-    def set(self, section, key, value):
-        self._config.set(section, key, value)
-
-    def save(self):
-        with open(self.config_path, "w") as f:
-            self._config.write(f)
+from cli import parser
+from config import VaultConfig
+from logger import Logger
+from utils import copy_to_clipboard
 
 
 class Vault:
@@ -259,8 +156,8 @@ class Vault:
         vault_exists = c.execute("SELECT name FROM vaults WHERE name = ?", t).fetchone()
 
         if not vault_exists:
-            if not confirm_prompt(
-                f"Vault '{args.dest_vault}' does not exist. Do you want to create it",
+            if not Logger.confirm(
+                f"Vault '{args.dest_vault}' does not exist. Do you want to create it?",
                 default=True,
             ):
                 return
@@ -275,8 +172,8 @@ class Vault:
         ).fetchone()
 
         if login_exists:
-            if not args.force and not confirm_prompt(
-                f"Overwrite existing login '{args.name}' in vault '{args.dest_vault}'"
+            if not args.force and not Logger.confirm(
+                f"Overwrite existing login '{args.name}' in vault '{args.dest_vault}'?"
             ):
                 return
             c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
@@ -335,7 +232,7 @@ class Vault:
         Logger.success(f"{action[0]} login '{args.name}' in vault '{args.dest_vault}'")
         if args.genpass:
             if not copy_to_clipboard(login[2], "Password"):
-                if confirm_prompt(
+                if Logger.confirm(
                     "Display generated password?",
                     cancel_message=None,
                 ):
@@ -423,7 +320,7 @@ class Vault:
         conn.close()
 
         if not copy_to_clipboard(password, "Password"):
-            if confirm_prompt("Display password?", cancel_message=None):
+            if Logger.confirm("Display password?", cancel_message=None):
                 Logger.info(f"{Logger.bold('Password')}: {password}")
 
     @staticmethod
@@ -554,8 +451,8 @@ class Vault:
             ).fetchone()
 
             if new_vault_exists:
-                if not args.force and not confirm_prompt(
-                    f"Overwrite existing vault '{args.new_name}'",
+                if not args.force and not Logger.confirm(
+                    f"Overwrite existing vault '{args.new_name}'?",
                 ):
                     return
                 c.execute("DELETE FROM vaults WHERE name = ?", t)
@@ -585,8 +482,8 @@ class Vault:
             ).fetchone()
 
             if new_login_exists:
-                if not args.force and not confirm_prompt(
-                    f"Overwrite existing login '{args.new_name}'",
+                if not args.force and not Logger.confirm(
+                    f"Overwrite existing login '{args.new_name}'?",
                 ):
                     return
                 c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
@@ -641,8 +538,8 @@ class Vault:
         ).fetchone()
 
         if dest_login_exists:
-            if not args.force and not confirm_prompt(
-                f"Overwrite existing login '{args.name}' in vault '{args.dest_vault}'",
+            if not args.force and not Logger.confirm(
+                f"Overwrite existing login '{args.name}' in vault '{args.dest_vault}'?",
             ):
                 return
             c.execute("DELETE FROM logins WHERE name = ? AND vault = ?", t)
@@ -713,8 +610,8 @@ class Vault:
             ).fetchone()
 
             if login_exists:
-                if not args.force and not confirm_prompt(
-                    f"Edit password for existing login '{args.login}' in vault '{args.vault}'"
+                if not args.force and not Logger.confirm(
+                    f"Edit password for existing login '{args.login}' in vault '{args.vault}'?"
                 ):
                     return
 
@@ -746,7 +643,7 @@ class Vault:
                 conn.close()
 
         if not copy_to_clipboard(password, "Generated password"):
-            if confirm_prompt("Print password to console?", cancel_message=None):
+            if Logger.confirm("Print password to console?", cancel_message=None):
                 Logger.info(f"{Logger.bold('Password')}: {password}")
             else:
                 return
@@ -779,7 +676,7 @@ class Vault:
 
         Logger.info(f"{Logger.bold('Username')}: {login[0]}")
         if not copy_to_clipboard(login[1], "Password"):
-            if confirm_prompt("Display password?", cancel_message=None):
+            if Logger.confirm("Display password?", cancel_message=None):
                 Logger.info(f"{Logger.bold('Password')}: {login[1]}")
 
         # Open URL in browser
@@ -867,43 +764,47 @@ class Vault:
         Vault._update_session()
 
 
-args = parser.parse_args()
+def main():
+    args = parser.parse_args()
 
-try:
-    if args.command != "init" and not Vault.dmgExists():
-        if confirm_prompt(
-            "Vault image does not exist. Do you want to create it?",
-            cancel_message=None,
-            default=True,
-        ):
-            Vault.init()
-        else:
-            raise ValueError(
-                "Vault image does not exist. Run 'vault init' to create it."
-            )
-    elif args.command not in ["lock", "unlock"]:
-        Vault._validate_session()
+    try:
+        if args.command != "init" and not Vault.dmgExists():
+            if Logger.confirm(
+                "Vault image does not exist. Do you want to create it?",
+                cancel_message=None,
+                default=True,
+            ):
+                Vault.init()
+            else:
+                raise ValueError(
+                    "Vault image does not exist. Run 'vault init' to create it."
+                )
+        elif args.command not in ["lock", "unlock"]:
+            Vault._validate_session()
 
-    Vault.run_command(args)
-
-except PermissionError as e:
-    Logger.error(e)
-    if not Vault.unlocked() and confirm_prompt(
-        "Vaults are locked. Do you want to unlock them?", cancel_message=None
-    ):
-        Vault.unlock()
         Vault.run_command(args)
-    else:
+
+    except PermissionError as e:
+        Logger.error(e)
+        if not Vault.unlocked() and Logger.confirm(
+            "Vaults are locked. Do you want to unlock them?", cancel_message=None
+        ):
+            Vault.unlock()
+            Vault.run_command(args)
+        else:
+            sys.exit(1)
+
+    except KeyboardInterrupt:
+        Logger.info("Operation cancelled")
+        sys.exit(130)
+
+    except (ValueError, IOError) as e:
+        Logger.error(e)
         sys.exit(1)
 
-except KeyboardInterrupt:
-    Logger.info("Operation cancelled")
-    sys.exit(130)
+    except Exception as e:
+        Logger.error(f"An unexpected error occurred: {e}")
+        sys.exit(1)
 
-except (ValueError, IOError) as e:
-    Logger.error(e)
-    sys.exit(1)
-
-except Exception as e:
-    Logger.error(f"An unexpected error occurred: {e}")
-    sys.exit(1)
+if __name__ == "__main__":
+    main()
