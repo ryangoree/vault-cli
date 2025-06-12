@@ -594,12 +594,9 @@ class Vault:
         symbols = string.punctuation
 
         if args:
-            length = args.length or Vault.cfg.genpass_length()
-            digits_count = args.digits or Vault.cfg.genpass_digits()
-            symbols_count = args.symbols or Vault.cfg.genpass_symbols()
-            length = int(length)
-            digits_count = int(digits_count)
-            symbols_count = int(symbols_count)
+            length = int(args.length or Vault.cfg.genpass_length)
+            digits_count = int(args.digits or Vault.cfg.genpass_digits)
+            symbols_count = int(args.symbols or Vault.cfg.genpass_symbols)
         else:
             length = Vault.cfg.genpass_length()
             digits_count = Vault.cfg.genpass_digits()
