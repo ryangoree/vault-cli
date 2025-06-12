@@ -21,7 +21,7 @@ class VaultConfig:
             "mount_path": "/Volumes/vault",
             "db_path": "/Volumes/vault/vault.db",
         }
-        self._config["genpass"] = {"length": "16", "digits": "4", "symbols": "4"}
+        self._config["genpass"] = {"length": "18", "digits": "4", "symbols": "4"}
 
         self.save()
         Logger.success(f"Created default config file at {self.config_path}")

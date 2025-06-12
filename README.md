@@ -110,7 +110,7 @@ mount_path = /Volumes/vault
 db_path = /Volumes/vault/vault.db
 
 [genpass]
-length = 16
+length = 18
 digits = 4
 symbols = 4
 ```
