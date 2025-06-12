@@ -105,7 +105,6 @@ The vault creates a config file (`vault.cfg`) with these settings:
 ```ini
 [vault]
 session_timeout = 900 # 15 minutes in seconds
-session_path = /path/to/.vault_session
 img_path = /path/to/vault.dmg
 mount_path = /Volumes/vault
 db_path = /Volumes/vault/vault.db

@@ -123,8 +123,9 @@ class Logger:
 
     @staticmethod
     def confirm(message, cancel_message="Operation canceled.", default=False):
-        prefix = Logger.yellow("? ")
+        prefix = Logger.cyan("? ")
         suffix = " [Y/n]?" if default else " [y/N]?"
+        cancel_prefix = Logger.red("✖︎ ")
 
         def ask():
             try:
@@ -132,18 +133,19 @@ class Logger:
             except (EOFError, KeyboardInterrupt):
                 print()
                 if cancel_message:
-                    Logger.warn(cancel_message)
+                    print(f"{cancel_prefix}{cancel_message}")
                 return False
+
             if not default and (response == "" or response.startswith("n")):
                 if cancel_message:
-                    Logger.warn(cancel_message)
+                    print(f"{cancel_prefix}{cancel_message}")
                 return False
-            elif default and (response == "" or response.startswith("y")):
+            if default and (response == "" or response.startswith("y")):
                 return True
-            elif response in ["y", "yes", "n", "no"]:
+            if response in ["y", "yes", "n", "no"]:
                 return response.startswith("y")
-            else:
-                Logger.error("Invalid answer. Please enter y, yes, n, or no")
-                return ask()
+
+            Logger.error("Invalid answer. Please enter y, yes, n, or no")
+            return ask()
 
         return ask()

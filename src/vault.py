@@ -27,7 +27,7 @@ class Vault:
 
     @staticmethod
     def dmgExists():
-        return Vault.unlocked() or os.path.isfile(Vault.cfg.img_path)
+        return os.path.isfile(Vault.cfg.img_path)
 
     @staticmethod
     def _get_image_device():
@@ -46,29 +46,55 @@ class Vault:
 
     @staticmethod
     def _update_session():
-        with open(Vault.cfg.session_path, "w") as f:
-            f.write(str(time.time()))
+        conn = sqlite3.connect(Vault.cfg.db_path)
+        c = conn.cursor()
+        current_time = time.time()
+        existing_session = c.execute("SELECT 1 FROM sessions").fetchone()
+
+        if existing_session:
+            c.execute(
+                "UPDATE sessions SET last_activity = ?",
+                (current_time,),
+            )
+        else:
+            c.execute(
+                "INSERT INTO sessions (created_at, last_activity) VALUES (?, ?)",
+                (current_time, current_time),
+            )
+
+        conn.commit()
+        conn.close()
 
     @staticmethod
     def _validate_session():
-        session_exists = os.path.isfile(Vault.cfg.session_path)
-        if not session_exists:
+        conn = sqlite3.connect(Vault.cfg.db_path)
+        c = conn.cursor()
+
+        session = c.execute("SELECT last_activity FROM sessions").fetchone()
+
+        conn.close()
+
+        if not session:
             Vault.lock()
             raise PermissionError("No active session found.")
 
-        is_valid = False
-        try:
-            with open(Vault.cfg.session_path, "r") as f:
-                last_activity = float(f.read().strip())
-            is_valid = (time.time() - last_activity) < Vault.cfg.session_timeout
-        except Exception:
-            pass
+        last_activity = session[0]
+        current_time = time.time()
 
-        if is_valid:
+        if (current_time - last_activity) < Vault.cfg.session_timeout:
             Vault._update_session()
         else:
+            Vault._delete_session()
             Vault.lock()
             raise PermissionError("Session expired.")
+
+    @staticmethod
+    def _delete_session():
+        conn = sqlite3.connect(Vault.cfg.db_path)
+        c = conn.cursor()
+        c.execute("DELETE FROM sessions")
+        conn.commit()
+        conn.close()
 
     @staticmethod
     def run_command(args):
@@ -118,6 +144,11 @@ class Vault:
             url text,
             notes text,
             vault text)"""
+        )
+        c.execute(
+            """CREATE TABLE sessions(
+            created_at REAL NOT NULL,
+            last_activity REAL NOT NULL)"""
         )
 
         if args and args.vaults:
@@ -563,16 +594,16 @@ class Vault:
         symbols = string.punctuation
 
         if args:
-            length = args.length or Vault.cfg.get("genpass", "length")
-            digits_count = args.digits or Vault.cfg.get("genpass", "digits")
-            symbols_count = args.symbols or Vault.cfg.get("genpass", "symbols")
+            length = args.length or Vault.cfg.genpass_length()
+            digits_count = args.digits or Vault.cfg.genpass_digits()
+            symbols_count = args.symbols or Vault.cfg.genpass_symbols()
             length = int(length)
             digits_count = int(digits_count)
             symbols_count = int(symbols_count)
         else:
-            length = int(Vault.cfg.get("genpass", "length"))
-            digits_count = int(Vault.cfg.get("genpass", "digits"))
-            symbols_count = int(Vault.cfg.get("genpass", "symbols"))
+            length = Vault.cfg.genpass_length()
+            digits_count = Vault.cfg.genpass_digits()
+            symbols_count = Vault.cfg.genpass_symbols()
 
         letters_count = length - digits_count - symbols_count
 
@@ -730,16 +761,15 @@ class Vault:
                 Logger.success("Vaults are already locked.")
             return
 
+        Vault._delete_session()
         subprocess.call(["diskutil", "unmount", Vault.cfg.mount_path])
 
         device = Vault._get_image_device()
         if not device:
             Logger.warn("No device nodes found for the vault image.")
             return
-        subprocess.call(["hdiutil", "detach", device])
 
-        if os.path.isfile(Vault.cfg.session_path):
-            os.remove(Vault.cfg.session_path)
+        subprocess.call(["hdiutil", "detach", device])
 
         if args != None:
             Logger.success("Locked vaults.")
@@ -761,7 +791,7 @@ class Vault:
             )
             if unlock == 0:
                 Logger.success("Unlocked vaults.")
-        Vault._update_session()
+                Vault._update_session()
 
 
 def main():
@@ -779,32 +809,33 @@ def main():
                 raise ValueError(
                     "Vault image does not exist. Run 'vault init' to create it."
                 )
-        elif args.command not in ["lock", "unlock"]:
-            Vault._validate_session()
+        elif not Vault.unlocked() and args.command not in ["lock", "unlock", "init"]:
+            if Logger.confirm(
+                "Vaults are locked. Do you want to unlock them?",
+                cancel_message=None,
+                default=True,
+            ):
+                Vault.unlock()
+                if not Vault.unlocked():
+                    raise PermissionError("Failed to unlock vaults.")
+            else:
+                raise PermissionError("Vaults are locked. Please unlock them first.")
 
+        Vault._validate_session()
         Vault.run_command(args)
-
-    except PermissionError as e:
-        Logger.error(e)
-        if not Vault.unlocked() and Logger.confirm(
-            "Vaults are locked. Do you want to unlock them?", cancel_message=None
-        ):
-            Vault.unlock()
-            Vault.run_command(args)
-        else:
-            sys.exit(1)
 
     except KeyboardInterrupt:
         Logger.info("Operation cancelled")
         sys.exit(130)
 
-    except (ValueError, IOError) as e:
+    except (ValueError, IOError, PermissionError) as e:
         Logger.error(e)
         sys.exit(1)
 
     except Exception as e:
         Logger.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

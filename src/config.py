@@ -7,23 +7,16 @@ from logger import Logger
 class VaultConfig:
     def __init__(self, config_path):
         self.config_path = config_path
-        self._config = None
-        self._load_config()
-
-    def _load_config(self):
         self._config = configparser.ConfigParser()
-
         if not os.path.isfile(self.config_path):
             self._create_default_config()
-        else:
-            self._config.read(self.config_path)
+        self._config.read(self.config_path)
 
     def _create_default_config(self):
         cmd_path = os.path.dirname(os.path.realpath(__file__))
 
         self._config["vault"] = {
             "session_timeout": "900 # 15 mins in seconds",
-            "session_path": os.path.abspath(f"{cmd_path}/.vault_session"),
             "img_path": os.path.abspath(f"{cmd_path}/vault.dmg"),
             "mount_path": "/Volumes/vault",
             "db_path": "/Volumes/vault/vault.db",
@@ -34,8 +27,8 @@ class VaultConfig:
         Logger.success(f"Created default config file at {self.config_path}")
 
     @property
-    def db_path(self):
-        return self.get("vault", "db_path")
+    def session_timeout(self):
+        return int(self.get("vault", "session_timeout"))
 
     @property
     def img_path(self):
@@ -46,12 +39,20 @@ class VaultConfig:
         return self.get("vault", "mount_path")
 
     @property
-    def session_path(self):
-        return self.get("vault", "session_path")
+    def db_path(self):
+        return self.get("vault", "db_path")
 
     @property
-    def session_timeout(self):
-        return int(self.get("vault", "session_timeout"))
+    def genpass_length(self):
+        return int(self.get("genpass", "length"))
+
+    @property
+    def genpass_digits(self):
+        return int(self.get("genpass", "digits"))
+
+    @property
+    def genpass_symbols(self):
+        return int(self.get("genpass", "symbols"))
 
     def has_option(self, section, key):
         return self._config.has_option(section, key)
